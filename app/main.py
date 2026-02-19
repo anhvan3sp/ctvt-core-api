@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from app.routers import auth
 from app.database import get_db
-
+from app.auth_utils import get_password_hash
 app = FastAPI()
 app.include_router(auth.router)
 
@@ -19,3 +19,6 @@ def test_db(db: Session = Depends(get_db)):
         return {"db_status": "connected", "result": result[0]}
     except Exception as e:
         return {"db_status": "error", "detail": str(e)}
+@app.get("/create-hash")
+def create_hash():
+    return {"hash": get_password_hash("123abc")}
