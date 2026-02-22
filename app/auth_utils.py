@@ -29,8 +29,7 @@ pwd_context = CryptContext(
 # PASSWORD FUNCTIONS
 # ==============================
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    print("RAW INPUT:", plain_password)
-    print("LENGTH:", len(plain_password.encode()))
+    
     return pwd_context.verify(plain_password.strip()[:72], hashed_password)
 
 
