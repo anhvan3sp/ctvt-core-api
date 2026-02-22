@@ -107,3 +107,100 @@ Hôm nay đã vượt qua phần khó nhất: deploy + kết nối DB thật.
 Mai chỉ còn xử lý môi trường Python và hoàn tất login.
 
 Nghỉ ngơi đi sếp. Mai làm tiếp cho gọn.
+NHẬT KÝ API – CTVT CORE
+
+📅 Ngày: 22-02-2026
+
+🎯 Mục tiêu hôm nay
+
+Hoàn tất Authentication và chuẩn bị triển khai Purchase API.
+
+✅ ĐÃ HOÀN THÀNH
+1️⃣ Deploy & Environment
+
+API chạy ổn định trên Render
+
+Kết nối MySQL Aiven thành công
+
+SSL & IP Access đã xử lý
+
+JWT hoạt động bình thường
+
+2️⃣ Authentication
+
+Model NhanVien đã kết nối DB thật
+
+Hash bcrypt lưu đúng format (60 ký tự)
+
+Login trả về access_token thành công
+
+Token decode lấy được ma_nv
+
+Ví dụ log:
+
+POST /auth/login → 200 OK
+
+👉 Authentication hoàn tất.
+
+3️⃣ Phân tích Purchase
+
+Đã rà soát database hiện tại:
+
+hoa_don_nhap
+
+hoa_don_nhap_chi_tiet
+
+nhat_ky_kho
+
+Quyết định:
+
+Không tạo bảng mới
+
+Sử dụng cấu trúc DB hiện có
+
+Ghi tồn kho qua nhat_ky_kho
+
+⏸ CHƯA LÀM
+
+Chưa viết services.py hoàn chỉnh cho Purchase
+
+Chưa tạo router /purchase
+
+Chưa test transaction
+
+Chưa kiểm tra rollback
+
+🧠 Trạng thái hệ thống hiện tại
+Thành phần	Trạng thái
+Deploy	✅ Ổn định
+Database	✅ Kết nối OK
+Authentication	✅ Hoàn thành
+Purchase API	⏳ Chưa triển khai
+📌 Vấn đề đã giải quyết hôm nay
+
+Lỗi bcrypt Python 3.14 (backend detection)
+
+Lỗi 72 bytes
+
+Xác minh hash DB
+
+Xác nhận login hoạt động
+
+🚀 Kế hoạch ngày mai (Day 2 chính thức)
+
+Viết create_hoa_don_nhap() trong services.py
+
+Thêm ghi nhat_ky_kho trong transaction
+
+Tạo router /purchase
+
+Test tạo hóa đơn bằng Postman
+
+Kiểm tra rollback nếu lỗi
+
+🔒 Nhận định
+
+Phần khó nhất (deploy + auth + DB thật) đã xong.
+Từ mai trở đi chỉ là nghiệp vụ thuần.
+
+Hệ thống core đang đi đúng hướng.
