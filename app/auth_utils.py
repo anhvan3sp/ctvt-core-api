@@ -28,16 +28,12 @@ pwd_context = CryptContext(
 # ==============================
 # PASSWORD FUNCTIONS
 # ==============================
-
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """
-    So sánh password người dùng nhập với password đã hash trong DB.
-    Bcrypt chỉ xử lý tối đa 72 bytes -> cần cắt trước khi verify.
-    """
-    if not plain_password or not hashed_password:
-        return False
+    print("RAW INPUT:", plain_password)
+    print("LENGTH:", len(plain_password.encode()))
+    return pwd_context.verify(plain_password.strip()[:72], hashed_password)
 
-    return pwd_context.verify(plain_password[:72], hashed_password)
+
 
 
 def get_password_hash(password: str) -> str:
