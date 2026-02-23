@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import NhanVien
+from fastapi import Header
 
 
 # ==============================
@@ -67,10 +68,16 @@ def create_access_token(data: Dict[str, Any]) -> str:
 # CURRENT USER
 # ==============================
 
+
 def get_current_user(
-    token: str = Depends(oauth2_scheme),
+    authorization: str = Header(...),
     db: Session = Depends(get_db)
 ) -> str:
+
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Thiếu token")
+
+    token = authorization.split(" ")[1]
 
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
