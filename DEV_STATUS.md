@@ -204,3 +204,129 @@ Phần khó nhất (deploy + auth + DB thật) đã xong.
 Từ mai trở đi chỉ là nghiệp vụ thuần.
 
 Hệ thống core đang đi đúng hướng.
+📒 NHẬT KÝ CTVT CORE API
+
+Ngày: 23-02-2026
+Giai đoạn: Day 2 – Purchase API
+
+🎯 Mục tiêu hôm nay
+
+Hoàn thiện xác thực token cho các API protected
+
+Tạo router /purchase
+
+Test POST hóa đơn nhập đầu tiên
+
+✅ ĐÃ HOÀN THÀNH
+1️⃣ Hoàn thiện cơ chế JWT
+
+Bỏ OAuth2PasswordBearer
+
+Chuyển sang dùng Header thủ công:
+
+authorization: str = Header(...)
+
+Token hoạt động đúng
+
+/auth/login trả access_token chuẩn
+
+2️⃣ Tạo router /purchase
+
+Tạo file app/routers/purchase.py
+
+Include router trong main.py
+
+Swagger hiển thị:
+
+POST /purchase
+
+GET /purchase
+
+3️⃣ Hoàn thiện service create_hoa_don_nhap
+
+Hàm thực hiện:
+
+Tạo hoa_don_nhap
+
+Tạo hoa_don_nhap_chi_tiet
+
+Ghi nhat_ky_kho
+
+Tính tong_tien
+
+Tất cả nằm trong transaction
+
+Kiến trúc đúng hướng Core.
+
+⚠ VẤN ĐỀ GẶP HÔM NAY
+1️⃣ 422 – Thiếu header authorization
+
+Lý do:
+
+API yêu cầu Header
+
+Swagger chưa nhập đúng chỗ
+
+Đã xác định nguyên nhân.
+
+2️⃣ 422 – Validation body
+
+Có thể do:
+
+Sai mã ma_ncc / ma_kho / ma_sp
+
+Hoặc sai schema
+
+Chưa test thành công hóa đơn đầu tiên.
+
+📌 TRẠNG THÁI HỆ THỐNG
+
+Auth: ✅ Ổn định
+
+Router purchase: ✅ Load được
+
+Header token: ✅ Nhận được
+
+Purchase: ⏳ Chưa test thành công
+
+DB: ✅ Kết nối ổn
+
+🎯 KẾ HOẠCH NGÀY MAI
+
+Test lại POST /purchase với:
+
+Token đúng format
+
+Mã tồn tại trong DB
+
+Kiểm tra:
+
+hoa_don_nhap
+
+hoa_don_nhap_chi_tiet
+
+nhat_ky_kho
+
+Nếu OK → chuyển sang:
+
+GET /purchase
+
+Sau đó bắt đầu tồn kho
+
+🧠 Đánh giá hôm nay
+
+Phần khó nhất (auth + deploy + DB) đã qua.
+
+Hệ thống đã có cấu trúc rõ ràng.
+
+Còn lại chỉ là test và tinh chỉnh.
+
+Tiến độ đang đi đúng hướng.
+
+Mai vào lại chat này, nói:
+
+"Tiếp tục test purchase"
+
+Ta xử lý dứt điểm.
+
+Nghỉ đi. Hôm nay làm đủ rồi.
