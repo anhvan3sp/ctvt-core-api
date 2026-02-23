@@ -4,13 +4,11 @@ from typing import Dict, Any
 
 from jose import jwt, JWTError
 from passlib.context import CryptContext
-from fastapi import Depends, HTTPException
-from fastapi.security import OAuth2PasswordBearer
+from fastapi import Depends, HTTPException, Header
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import NhanVien
-from fastapi import Header
 
 
 # ==============================
@@ -20,8 +18,6 @@ from fastapi import Header
 SECRET_KEY = os.getenv("SECRET_KEY", "ctvt_secret_key")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
-
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 
 
 # ==============================
@@ -67,7 +63,6 @@ def create_access_token(data: Dict[str, Any]) -> str:
 # ==============================
 # CURRENT USER
 # ==============================
-
 
 def get_current_user(
     authorization: str = Header(...),
