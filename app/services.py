@@ -28,8 +28,8 @@ def create_hoa_don_nhap(db: Session, data: HoaDonNhapCreate, ma_nv: str):
         db.flush()   # Lấy ID
 
         for item in data.items:
-
-            thanh_tien = Decimal(item.so_luong) * Decimal(item.don_gia)
+            thanh_tien = Decimal(str(item.so_luong)) * Decimal(str(item.don_gia))
+            
             tong_tien += thanh_tien
 
             # 1️⃣ Thêm chi tiết hóa đơn
@@ -56,3 +56,4 @@ def create_hoa_don_nhap(db: Session, data: HoaDonNhapCreate, ma_nv: str):
 
         hoa_don.tong_tien = tong_tien
         hoa_don.tong_thanh_toan = tong_tien
+        return hoa_don
