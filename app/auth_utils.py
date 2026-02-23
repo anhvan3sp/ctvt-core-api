@@ -4,7 +4,8 @@ from typing import Dict, Any
 
 from jose import jwt, JWTError
 from passlib.context import CryptContext
-from fastapi import Depends, HTTPException, Header
+from fastapi import Depends, HTTPException
+from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -18,6 +19,8 @@ from app.models import NhanVien
 SECRET_KEY = os.getenv("SECRET_KEY", "ctvt_secret_key")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 
 # ==============================
@@ -65,28 +68,28 @@ def create_access_token(data: Dict[str, Any]) -> str:
 # ==============================
 
 def get_current_user(
-    authorization: str = Header(...),
+    token: str = Depends(oauth2_scheme),
     db: Session = Depends(get_db)
 ) -> str:
 
-    if not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Thiếu token")
-
-    token = authorization.split(" ")[1]
+    credentials_exception = HTTPException(
+        status_code=401,
+        detail="Không thể xác thực người dùng"
+    )
 
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         ma_nv: str = payload.get("sub")
 
         if ma_nv is None:
-            raise HTTPException(status_code=401, detail="Token không hợp lệ")
+            raise credentials_exception
 
     except JWTError:
-        raise HTTPException(status_code=401, detail="Token không hợp lệ")
+        raise credentials_exception
 
     user = db.query(NhanVien).filter(NhanVien.ma_nv == ma_nv).first()
 
     if user is None:
-        raise HTTPException(status_code=401, detail="User không tồn tại")
+        raise credentials_exception
 
     return user.ma_nv
