@@ -1,3 +1,4 @@
+from app.routers import purchase
 from fastapi import FastAPI, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -6,6 +7,7 @@ from app.database import get_db
 from app.auth_utils import get_password_hash
 app = FastAPI()
 app.include_router(auth.router)
+app.include_router(purchase.router)
 
 @app.get("/")
 def root():
