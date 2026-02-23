@@ -60,3 +60,16 @@ class HoaDonNhapChiTiet(Base):
     thanh_tien = Column(DECIMAL(18, 2))
 
     hoa_don = relationship("HoaDonNhap", back_populates="items")
+
+class NhatKyKho(Base):
+    __tablename__ = "nhat_ky_kho"
+
+    id = Column(Integer, primary_key=True, index=True)
+    ngay = Column(DateTime)
+    ma_sp = Column(String(50))
+    ma_kho = Column(String(20))
+    so_luong = Column(DECIMAL(10, 2))
+    loai = Column(Enum("nhap", "xuat"))
+    bang_tham_chieu = Column(String(50))
+    id_tham_chieu = Column(Integer)
+    ngay_tao = Column(DateTime, default=datetime.utcnow)
