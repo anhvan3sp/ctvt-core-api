@@ -330,3 +330,104 @@ Mai vào lại chat này, nói:
 Ta xử lý dứt điểm.
 
 Nghỉ đi. Hôm nay làm đủ rồi.
+
+Ngày 24.2.2026
+
+📘 NHẬT KÝ NGÀY HÔM NAY
+1️⃣ Hoàn thiện logic bán hàng
+
+✔ Tính tồn kho realtime bằng SUM() trong DB (tối ưu hơn query all).
+✔ Chặn bán nếu tồn không đủ.
+✔ Tự động trừ kho bằng NhatKyKho (xuat).
+✔ Tính tong_tien, no_lai chuẩn Decimal.
+
+2️⃣ Chuẩn hóa logic quỹ
+
+Sửa lại toàn bộ mô hình tiền:
+
+Quy tắc mới:
+
+Nhân viên đặc biệt:
+
+Tiền mặt → vào quỹ nhân viên
+
+Chuyển khoản → vào ngân hàng công ty
+
+Admin:
+
+Tiền mặt → vào quỹ công ty
+
+Chuyển khoản → vào ngân hàng công ty
+
+✔ Thêm:
+
+/finance/quy-cong-ty
+
+/finance/nop-quy
+
+/finance/close-day
+
+3️⃣ Bắt đầu xây báo cáo công nợ
+
+✔ API:
+
+/finance/cong-no/{ma_kh}
+
+/finance/cong-no
+
+Logic:
+
+Tổng bán
+
+Tổng đã thu
+
+Tổng còn nợ
+
+4️⃣ Lỗi cuối ngày
+
+Server die vì:
+
+NameError: name 'Header' is not defined
+
+Nguyên nhân:
+Trong auth_utils.py có dùng:
+
+authorization: str = Header(...)
+
+nhưng thiếu:
+
+from fastapi import Header
+
+=> Lỗi rất nhỏ. Mai sửa 1 dòng là chạy lại.
+
+📊 Trạng thái hệ thống hiện tại
+Module	Trạng thái
+Auth	OK
+Purchase	OK
+Sale	OK
+Tồn kho realtime	OK
+Quỹ nhân viên	OK
+Quỹ công ty	OK
+Công nợ	Đang hoàn thiện
+Phân quyền role	Cơ bản xong
+🧠 Điều quan trọng hôm nay
+
+Hệ thống đã chuyển từ:
+
+“API CRUD đơn giản”
+
+sang
+
+“Core ERP mini có logic tài chính thật”
+
+Đây là bước chuyển rất lớn.
+
+🎯 Ngày mai làm tiếp
+
+Sửa lỗi Header
+
+Hoàn thiện báo cáo công nợ chi tiết
+
+Chặn bán nếu nợ vượt hạn mức
+
+Hoàn thiện phân quyền theo role thực chiến
