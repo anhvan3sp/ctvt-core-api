@@ -6,6 +6,7 @@ from app.database import get_db
 from app.routers import auth, purchase, sale
 from app.auth_utils import get_password_hash
 from app.routers import stock
+from app.routers import finance
 
 
 app = FastAPI()
@@ -17,6 +18,8 @@ app.include_router(auth.router)
 app.include_router(purchase.router)
 app.include_router(sale.router)
 app.include_router(stock.router)
+app.include_router(finance.router)
+
 
 # ==============================
 # ROOT
