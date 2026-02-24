@@ -78,7 +78,7 @@ def create_hoa_don_ban(db: Session, data: HoaDonBanCreate, ma_nv: str):
             ma_kho=data.ma_kho,
             tien_mat=data.tien_mat,
             tien_ck=data.tien_ck,
-            trang_thai="nhap"
+            trang_thai="xac_nhan"
         )
 
         db.add(hoa_don)
@@ -86,14 +86,15 @@ def create_hoa_don_ban(db: Session, data: HoaDonBanCreate, ma_nv: str):
 
         for item in data.items:
 
-            # 🔎 Kiểm tra tồn kho realtime
-            ton = db.query(NhatKyKho).filter(
+            # 🔎 TÍNH TỒN REALTIME
+            nhat_ky = db.query(NhatKyKho).filter(
                 NhatKyKho.ma_sp == item.ma_sp,
                 NhatKyKho.ma_kho == data.ma_kho
             ).all()
 
-            tong_nhap = sum([t.so_luong for t in ton if t.loai == "nhap"])
-            tong_xuat = sum([t.so_luong for t in ton if t.loai == "xuat"])
+            tong_nhap = sum([float(n.so_luong) for n in nhat_ky if n.loai == "nhap"])
+            tong_xuat = sum([float(n.so_luong) for n in nhat_ky if n.loai == "xuat"])
+
             so_ton = tong_nhap - tong_xuat
 
             if so_ton < item.so_luong:
@@ -102,17 +103,17 @@ def create_hoa_don_ban(db: Session, data: HoaDonBanCreate, ma_nv: str):
             thanh_tien = Decimal(str(item.so_luong)) * Decimal(str(item.don_gia))
             tong_tien += thanh_tien
 
-            chi_tiet = HoaDonBanChiTiet(
+            # Thêm chi tiết
+            db.add(HoaDonBanChiTiet(
                 id_hoa_don=hoa_don.id,
                 ma_sp=item.ma_sp,
                 so_luong=item.so_luong,
                 don_gia=item.don_gia,
                 thanh_tien=thanh_tien
-            )
-            db.add(chi_tiet)
+            ))
 
-            # 🔻 Ghi nhật ký xuất kho
-            nhat_ky = NhatKyKho(
+            # Trừ kho
+            db.add(NhatKyKho(
                 ngay=datetime.utcnow(),
                 ma_sp=item.ma_sp,
                 ma_kho=data.ma_kho,
@@ -120,12 +121,26 @@ def create_hoa_don_ban(db: Session, data: HoaDonBanCreate, ma_nv: str):
                 loai="xuat",
                 bang_tham_chieu="hoa_don_ban",
                 id_tham_chieu=hoa_don.id
-            )
-            db.add(nhat_ky)
+            ))
 
         hoa_don.tong_tien = tong_tien
         hoa_don.tong_thanh_toan = tong_tien
-        hoa_don.no_lai = tong_tien - Decimal(str(data.tien_mat)) - Decimal(str(data.tien_ck))
+
+        # Tính nợ
+        da_thu = Decimal(str(data.tien_mat)) + Decimal(str(data.tien_ck))
+        hoa_don.no_lai = tong_tien - da_thu
+
+        # Nếu có tiền thu → ghi thu_chi
+        if da_thu > 0:
+            db.add(ThuChi(
+                ngay=datetime.utcnow(),
+                doi_tuong="cong_ty",
+                ma_nv=ma_nv,
+                so_tien=da_thu,
+                loai="thu",
+                hinh_thuc="tien_mat" if data.tien_mat > 0 else "chuyen_khoan",
+                noi_dung=f"Thu tiền bán hàng HĐ {hoa_don.id}"
+            ))
 
         db.commit()
         db.refresh(hoa_don)
