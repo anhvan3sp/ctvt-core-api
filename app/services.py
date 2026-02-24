@@ -11,16 +11,17 @@ from app.models import (
     HoaDonBan,
     HoaDonBanChiTiet,
     NhatKyKho,
-    ThuChi
+    ThuChi,
+    NhanVien
 )
 
 from app.schemas import HoaDonNhapCreate, HoaDonBanCreate
 
 
-# ===============================
+# =====================================================
 # NHẬP HÀNG
-# ===============================
-def create_hoa_don_nhap(db: Session, data: HoaDonNhapCreate, ma_nv: str):
+# =====================================================
+def create_hoa_don_nhap(db: Session, data: HoaDonNhapCreate, user: NhanVien):
 
     try:
         tong_tien = Decimal("0")
@@ -28,7 +29,7 @@ def create_hoa_don_nhap(db: Session, data: HoaDonNhapCreate, ma_nv: str):
         hoa_don = HoaDonNhap(
             ngay=data.ngay,
             ma_ncc=data.ma_ncc,
-            ma_nv=ma_nv,
+            ma_nv=user.ma_nv,
             ma_kho=data.ma_kho,
             trang_thai="nhap",
             tien_mat=data.tien_mat,
@@ -72,10 +73,10 @@ def create_hoa_don_nhap(db: Session, data: HoaDonNhapCreate, ma_nv: str):
         raise e
 
 
-# ===============================
-# BÁN HÀNG (CÓ KIỂM TỒN REALTIME)
-# ===============================
-def create_hoa_don_ban(db: Session, data: HoaDonBanCreate, ma_nv: str):
+# =====================================================
+# BÁN HÀNG (CÓ TỒN REALTIME + QUỸ RIÊNG NV)
+# =====================================================
+def create_hoa_don_ban(db: Session, data: HoaDonBanCreate, user: NhanVien):
 
     try:
         tong_tien = Decimal("0")
@@ -83,7 +84,7 @@ def create_hoa_don_ban(db: Session, data: HoaDonBanCreate, ma_nv: str):
         hoa_don = HoaDonBan(
             ngay=data.ngay,
             ma_kh=data.ma_kh,
-            ma_nv=ma_nv,
+            ma_nv=user.ma_nv,
             ma_kho=data.ma_kho,
             tien_mat=data.tien_mat,
             tien_ck=data.tien_ck,
@@ -93,9 +94,11 @@ def create_hoa_don_ban(db: Session, data: HoaDonBanCreate, ma_nv: str):
         db.add(hoa_don)
         db.flush()
 
+        # ==============================
+        # XỬ LÝ CHI TIẾT + KIỂM TỒN
+        # ==============================
         for item in data.items:
 
-            # ===== TÍNH TỒN REALTIME (TỐI ƯU DB) =====
             tong_nhap = db.query(
                 func.coalesce(func.sum(NhatKyKho.so_luong), 0)
             ).filter(
@@ -138,22 +141,45 @@ def create_hoa_don_ban(db: Session, data: HoaDonBanCreate, ma_nv: str):
                 id_tham_chieu=hoa_don.id
             ))
 
+        # ==============================
+        # TÍNH TIỀN
+        # ==============================
         hoa_don.tong_tien = tong_tien
         hoa_don.tong_thanh_toan = tong_tien
 
         da_thu = Decimal(str(data.tien_mat)) + Decimal(str(data.tien_ck))
         hoa_don.no_lai = tong_tien - da_thu
 
+        # ==============================
+        # XỬ LÝ QUỸ THEO ROLE
+        # ==============================
         if da_thu > 0:
-            db.add(ThuChi(
-                ngay=datetime.utcnow(),
-                doi_tuong="cong_ty",
-                ma_nv=ma_nv,
-                so_tien=da_thu,
-                loai="thu",
-                hinh_thuc="tien_mat" if data.tien_mat > 0 else "chuyen_khoan",
-                noi_dung=f"Thu tiền bán hàng HĐ {hoa_don.id}"
-            ))
+
+            # Nếu là nhân viên đặc biệt → giữ quỹ riêng
+            if user.vai_tro == "nv_dac_biet":
+
+                db.add(ThuChi(
+                    ngay=datetime.utcnow(),
+                    doi_tuong="nhan_vien",
+                    ma_nv=user.ma_nv,
+                    so_tien=da_thu,
+                    loai="thu",
+                    hinh_thuc="tien_mat" if data.tien_mat > 0 else "chuyen_khoan",
+                    noi_dung=f"Thu tiền bán hàng HĐ {hoa_don.id}"
+                ))
+
+            # Admin → thu thẳng vào quỹ công ty
+            else:
+
+                db.add(ThuChi(
+                    ngay=datetime.utcnow(),
+                    doi_tuong="cong_ty",
+                    ma_nv=user.ma_nv,
+                    so_tien=da_thu,
+                    loai="thu",
+                    hinh_thuc="tien_mat" if data.tien_mat > 0 else "chuyen_khoan",
+                    noi_dung=f"Thu tiền bán hàng HĐ {hoa_don.id}"
+                ))
 
         db.commit()
         db.refresh(hoa_don)
