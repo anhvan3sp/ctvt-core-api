@@ -3,9 +3,9 @@
 from sqlalchemy.orm import Session
 from decimal import Decimal
 from datetime import datetime
-
-from app.models import HoaDonNhap, HoaDonNhapChiTiet, NhatKyKho
+from app.models import HoaDonNhap, HoaDonNhapChiTiet, NhatKyKho, ThuChi
 from app.schemas import HoaDonNhapCreate
+
 
 
 def create_hoa_don_nhap(db: Session, data: HoaDonNhapCreate, ma_nv: str):
