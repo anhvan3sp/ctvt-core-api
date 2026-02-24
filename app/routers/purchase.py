@@ -11,18 +11,14 @@ from app.models import HoaDonNhap
 router = APIRouter(prefix="/purchase", tags=["Purchase"])
 
 
-@router.post("/", response_model=HoaDonNhapResponse)
+
+@router.post("/")
 def create_purchase(
     data: HoaDonNhapCreate,
     db: Session = Depends(get_db),
-    ma_nv: str = Depends(get_current_user)
+    user = Depends(require_roles(["admin", "nv_dac_biet"]))
 ):
-    try:
-        hoa_don = create_hoa_don_nhap(db, data, ma_nv)
-        return hoa_don
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
+    return create_hoa_don_nhap(db, data, user.ma_nv)
 
 @router.get("/", response_model=List[HoaDonNhapResponse])
 def get_purchase_list(
