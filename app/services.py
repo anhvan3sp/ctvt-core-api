@@ -40,6 +40,7 @@ def create_hoa_don_nhap(db: Session, data: HoaDonNhapCreate, user: NhanVien):
         db.flush()
 
         for item in data.items:
+
             thanh_tien = Decimal(str(item.so_luong)) * Decimal(str(item.don_gia))
             tong_tien += thanh_tien
 
@@ -74,7 +75,7 @@ def create_hoa_don_nhap(db: Session, data: HoaDonNhapCreate, user: NhanVien):
 
 
 # =====================================================
-# BÁN HÀNG (CÓ TỒN REALTIME + QUỸ RIÊNG NV)
+# BÁN HÀNG (LOGIC TIỀN CHUẨN)
 # =====================================================
 def create_hoa_don_ban(db: Session, data: HoaDonBanCreate, user: NhanVien):
 
@@ -94,22 +95,16 @@ def create_hoa_don_ban(db: Session, data: HoaDonBanCreate, user: NhanVien):
         db.add(hoa_don)
         db.flush()
 
-        # ==============================
-        # XỬ LÝ CHI TIẾT + KIỂM TỒN
-        # ==============================
+        # ===== XỬ LÝ TỒN =====
         for item in data.items:
 
-            tong_nhap = db.query(
-                func.coalesce(func.sum(NhatKyKho.so_luong), 0)
-            ).filter(
+            tong_nhap = db.query(func.coalesce(func.sum(NhatKyKho.so_luong), 0)).filter(
                 NhatKyKho.ma_sp == item.ma_sp,
                 NhatKyKho.ma_kho == data.ma_kho,
                 NhatKyKho.loai == "nhap"
             ).scalar()
 
-            tong_xuat = db.query(
-                func.coalesce(func.sum(NhatKyKho.so_luong), 0)
-            ).filter(
+            tong_xuat = db.query(func.coalesce(func.sum(NhatKyKho.so_luong), 0)).filter(
                 NhatKyKho.ma_sp == item.ma_sp,
                 NhatKyKho.ma_kho == data.ma_kho,
                 NhatKyKho.loai == "xuat"
@@ -141,45 +136,52 @@ def create_hoa_don_ban(db: Session, data: HoaDonBanCreate, user: NhanVien):
                 id_tham_chieu=hoa_don.id
             ))
 
-        # ==============================
-        # TÍNH TIỀN
-        # ==============================
         hoa_don.tong_tien = tong_tien
         hoa_don.tong_thanh_toan = tong_tien
 
-        da_thu = Decimal(str(data.tien_mat)) + Decimal(str(data.tien_ck))
-        hoa_don.no_lai = tong_tien - da_thu
+        # ===== XỬ LÝ TIỀN =====
+        tien_mat = Decimal(str(data.tien_mat))
+        tien_ck = Decimal(str(data.tien_ck))
 
-        # ==============================
-        # XỬ LÝ QUỸ THEO ROLE
-        # ==============================
-        if da_thu > 0:
+        # Tiền mặt
+        if tien_mat > 0:
 
-            # Nếu là nhân viên đặc biệt → giữ quỹ riêng
             if user.vai_tro == "nv_dac_biet":
 
                 db.add(ThuChi(
                     ngay=datetime.utcnow(),
                     doi_tuong="nhan_vien",
                     ma_nv=user.ma_nv,
-                    so_tien=da_thu,
+                    so_tien=tien_mat,
                     loai="thu",
-                    hinh_thuc="tien_mat" if data.tien_mat > 0 else "chuyen_khoan",
-                    noi_dung=f"Thu tiền bán hàng HĐ {hoa_don.id}"
+                    hinh_thuc="tien_mat",
+                    noi_dung=f"Thu tiền mặt HĐ {hoa_don.id}"
                 ))
 
-            # Admin → thu thẳng vào quỹ công ty
             else:
 
                 db.add(ThuChi(
                     ngay=datetime.utcnow(),
                     doi_tuong="cong_ty",
                     ma_nv=user.ma_nv,
-                    so_tien=da_thu,
+                    so_tien=tien_mat,
                     loai="thu",
-                    hinh_thuc="tien_mat" if data.tien_mat > 0 else "chuyen_khoan",
-                    noi_dung=f"Thu tiền bán hàng HĐ {hoa_don.id}"
+                    hinh_thuc="tien_mat",
+                    noi_dung=f"Thu tiền mặt HĐ {hoa_don.id}"
                 ))
+
+        # Chuyển khoản luôn vào ngân hàng công ty
+        if tien_ck > 0:
+
+            db.add(ThuChi(
+                ngay=datetime.utcnow(),
+                doi_tuong="cong_ty",
+                ma_nv=user.ma_nv,
+                so_tien=tien_ck,
+                loai="thu",
+                hinh_thuc="chuyen_khoan",
+                noi_dung=f"Thu chuyển khoản HĐ {hoa_don.id}"
+            ))
 
         db.commit()
         db.refresh(hoa_don)
