@@ -68,28 +68,31 @@ def create_access_token(data: Dict[str, Any]) -> str:
 # ==============================
 
 def get_current_user(
-    token: str = Depends(oauth2_scheme),
+    authorization: str = Header(...),
     db: Session = Depends(get_db)
-) -> str:
+):
 
-    credentials_exception = HTTPException(
-        status_code=401,
-        detail="Không thể xác thực người dùng"
-    )
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Thiếu token")
+
+    token = authorization.split(" ")[1]
 
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         ma_nv: str = payload.get("sub")
 
         if ma_nv is None:
-            raise credentials_exception
+            raise HTTPException(status_code=401, detail="Token không hợp lệ")
 
     except JWTError:
-        raise credentials_exception
+        raise HTTPException(status_code=401, detail="Token không hợp lệ")
 
-    user = db.query(NhanVien).filter(NhanVien.ma_nv == ma_nv).first()
+    user = db.query(NhanVien).filter(
+        NhanVien.ma_nv == ma_nv,
+        NhanVien.trang_thai == "hoat_dong"
+    ).first()
 
-    if user is None:
-        raise credentials_exception
+    if not user:
+        raise HTTPException(status_code=401, detail="User không tồn tại")
 
-    return user.ma_nv
+    return user
