@@ -10,10 +10,10 @@ from app.schemas import HoaDonNhapCreate
 
 def create_hoa_don_nhap(db: Session, data: HoaDonNhapCreate, ma_nv: str):
 
-    with db.begin():
+    try:
+        tong_tien = Decimal("0")
 
-        tong_tien = Decimal(0)
-
+        # 1️⃣ Tạo hóa đơn nhập
         hoa_don = HoaDonNhap(
             ngay=data.ngay,
             ma_ncc=data.ma_ncc,
@@ -25,14 +25,13 @@ def create_hoa_don_nhap(db: Session, data: HoaDonNhapCreate, ma_nv: str):
         )
 
         db.add(hoa_don)
-        db.flush()   # Lấy ID
+        db.flush()  # Lấy ID ngay
 
+        # 2️⃣ Thêm chi tiết + nhật ký kho
         for item in data.items:
             thanh_tien = Decimal(str(item.so_luong)) * Decimal(str(item.don_gia))
-            
             tong_tien += thanh_tien
 
-            # 1️⃣ Thêm chi tiết hóa đơn
             chi_tiet = HoaDonNhapChiTiet(
                 id_hoa_don=hoa_don.id,
                 ma_sp=item.ma_sp,
@@ -42,7 +41,6 @@ def create_hoa_don_nhap(db: Session, data: HoaDonNhapCreate, ma_nv: str):
             )
             db.add(chi_tiet)
 
-            # 2️⃣ Ghi nhật ký kho
             nhat_ky = NhatKyKho(
                 ngay=datetime.utcnow(),
                 ma_sp=item.ma_sp,
@@ -54,6 +52,16 @@ def create_hoa_don_nhap(db: Session, data: HoaDonNhapCreate, ma_nv: str):
             )
             db.add(nhat_ky)
 
+        # 3️⃣ Cập nhật tổng tiền
         hoa_don.tong_tien = tong_tien
         hoa_don.tong_thanh_toan = tong_tien
+
+        # 4️⃣ Commit
+        db.commit()
+        db.refresh(hoa_don)
+
         return hoa_don
+
+    except Exception as e:
+        db.rollback()
+        raise e
