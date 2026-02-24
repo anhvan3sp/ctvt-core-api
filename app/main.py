@@ -5,6 +5,8 @@ from sqlalchemy import text
 from app.routers import auth
 from app.database import get_db
 from app.auth_utils import get_password_hash
+from app.routers import sale
+app.include_router(sale.router)
 app = FastAPI()
 app.include_router(auth.router)
 app.include_router(purchase.router)
