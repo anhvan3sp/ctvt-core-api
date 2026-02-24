@@ -39,3 +39,17 @@ class HoaDonNhapCreate(BaseModel):
     tien_mat: float = 0
     tien_ck: float = 0
     items: List[HoaDonNhapItemCreate]
+
+class HoaDonBanItemCreate(BaseModel):
+    ma_sp: str
+    so_luong: float = Field(..., gt=0)
+    don_gia: float = Field(..., gt=0)
+
+
+class HoaDonBanCreate(BaseModel):
+    ngay: date
+    ma_kh: str
+    ma_kho: str
+    tien_mat: float = 0
+    tien_ck: float = 0
+    items: List[HoaDonBanItemCreate]
