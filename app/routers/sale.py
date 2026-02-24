@@ -9,10 +9,12 @@ from app.auth_utils import get_current_user
 router = APIRouter(prefix="/sale", tags=["Sale"])
 
 
+
+
 @router.post("/")
 def create_sale(
     data: HoaDonBanCreate,
     db: Session = Depends(get_db),
-    ma_nv: str = Depends(get_current_user)
+    user = Depends(require_roles(["admin", "nv_dac_biet"]))
 ):
-    return create_hoa_don_ban(db, data, ma_nv)
+    return create_hoa_don_ban(db, data, user.ma_nv)
