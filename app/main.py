@@ -11,6 +11,7 @@ app = FastAPI()
 app.include_router(auth.router)
 app.include_router(purchase.router)
 
+
 @app.get("/")
 def root():
     return {"message": "CTVT Core API running"}
