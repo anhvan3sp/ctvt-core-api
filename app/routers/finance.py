@@ -166,3 +166,30 @@ def bao_cao_cong_no(
         "tong_da_thu": tong_da_thu,
         "tong_con_no": tong_no
     }
+
+@router.get("/cong-no")
+def bao_cao_cong_no_toan_bo(
+    db: Session = Depends(get_db),
+    user = Depends(require_roles(["admin", "ke_toan"]))
+):
+
+    results = db.query(
+        HoaDonBan.ma_kh,
+        func.coalesce(func.sum(HoaDonBan.tong_tien), 0).label("tong_ban"),
+        func.coalesce(func.sum(HoaDonBan.no_lai), 0).label("tong_no")
+    ).filter(
+        HoaDonBan.trang_thai != "huy"
+    ).group_by(
+        HoaDonBan.ma_kh
+    ).all()
+
+    data = []
+
+    for r in results:
+        data.append({
+            "ma_kh": r.ma_kh,
+            "tong_ban": r.tong_ban,
+            "tong_con_no": r.tong_no
+        })
+
+    return data
