@@ -7,7 +7,7 @@ from decimal import Decimal
 from app.database import get_db
 from app.models import ThuChi
 from app.auth_utils import require_roles
-
+from app.models import HoaDonBan
 router = APIRouter(prefix="/finance", tags=["Finance"])
 
 
@@ -131,4 +131,38 @@ def close_day(
         "tong_thu": tong_thu,
         "tong_chi": tong_chi,
         "chenh_lech": Decimal(str(tong_thu)) - Decimal(str(tong_chi))
+    }
+
+
+
+@router.get("/cong-no/{ma_kh}")
+def bao_cao_cong_no(
+    ma_kh: str,
+    db: Session = Depends(get_db),
+    user = Depends(require_roles(["admin", "ke_toan"]))
+):
+
+    # Tổng tiền bán
+    tong_ban = db.query(
+        func.coalesce(func.sum(HoaDonBan.tong_tien), 0)
+    ).filter(
+        HoaDonBan.ma_kh == ma_kh,
+        HoaDonBan.trang_thai != "huy"
+    ).scalar()
+
+    # Tổng đã thanh toán
+    tong_da_thu = db.query(
+        func.coalesce(func.sum(HoaDonBan.tong_tien - HoaDonBan.no_lai), 0)
+    ).filter(
+        HoaDonBan.ma_kh == ma_kh,
+        HoaDonBan.trang_thai != "huy"
+    ).scalar()
+
+    tong_no = Decimal(str(tong_ban)) - Decimal(str(tong_da_thu))
+
+    return {
+        "ma_kh": ma_kh,
+        "tong_ban": tong_ban,
+        "tong_da_thu": tong_da_thu,
+        "tong_con_no": tong_no
     }
