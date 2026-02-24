@@ -73,3 +73,15 @@ class NhatKyKho(Base):
     bang_tham_chieu = Column(String(50))
     id_tham_chieu = Column(Integer)
     ngay_tao = Column(DateTime, default=datetime.utcnow)
+
+class NhaCungCap(Base):
+    __tablename__ = "nha_cung_cap"
+
+    id = Column(Integer, primary_key=True, index=True)
+    ma_ncc = Column(String(50), unique=True, nullable=False)
+    ten_ncc = Column(String(255))
+    dia_chi = Column(String(255))
+    so_dien_thoai = Column(String(20))
+    ma_so_thue = Column(String(50))
+    email = Column(String(255))
+    ngay_tao = Column(DateTime, default=datetime.utcnow)
