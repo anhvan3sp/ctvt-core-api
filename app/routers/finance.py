@@ -66,3 +66,40 @@ def nop_quy(
     db.commit()
 
     return {"message": "Nộp quỹ thành công"}
+
+@router.get("/quy-cong-ty")
+def xem_quy_cong_ty(
+    db: Session = Depends(get_db),
+    user = Depends(require_roles(["admin", "ke_toan"]))
+):
+
+    # Tiền mặt
+    thu_tm = db.query(func.coalesce(func.sum(ThuChi.so_tien), 0)).filter(
+        ThuChi.doi_tuong == "cong_ty",
+        ThuChi.hinh_thuc == "tien_mat",
+        ThuChi.loai == "thu"
+    ).scalar()
+
+    chi_tm = db.query(func.coalesce(func.sum(ThuChi.so_tien), 0)).filter(
+        ThuChi.doi_tuong == "cong_ty",
+        ThuChi.hinh_thuc == "tien_mat",
+        ThuChi.loai == "chi"
+    ).scalar()
+
+    # Ngân hàng
+    thu_ck = db.query(func.coalesce(func.sum(ThuChi.so_tien), 0)).filter(
+        ThuChi.doi_tuong == "cong_ty",
+        ThuChi.hinh_thuc == "chuyen_khoan",
+        ThuChi.loai == "thu"
+    ).scalar()
+
+    chi_ck = db.query(func.coalesce(func.sum(ThuChi.so_tien), 0)).filter(
+        ThuChi.doi_tuong == "cong_ty",
+        ThuChi.hinh_thuc == "chuyen_khoan",
+        ThuChi.loai == "chi"
+    ).scalar()
+
+    return {
+        "tien_mat_cong_ty": Decimal(str(thu_tm)) - Decimal(str(chi_tm)),
+        "tien_ngan_hang_cong_ty": Decimal(str(thu_ck)) - Decimal(str(chi_ck))
+    }
