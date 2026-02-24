@@ -8,9 +8,12 @@ from app.database import get_db
 from app.models import ThuChi
 
 router = APIRouter(prefix="/finance", tags=["Finance"])
-
 @router.post("/close-day")
-def close_day(db: Session = Depends(get_db)):
+def close_day(
+    db: Session = Depends(get_db),
+    user = Depends(require_roles(["admin", "ke_toan"]))
+):
+
 
     tong_thu = db.query(
         func.coalesce(func.sum(ThuChi.so_tien), 0)
