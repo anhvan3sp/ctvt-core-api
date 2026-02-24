@@ -96,3 +96,17 @@ def get_current_user(
         raise HTTPException(status_code=401, detail="User không tồn tại")
 
     return user
+
+def require_roles(allowed_roles: list):
+
+    def role_checker(user: NhanVien = Depends(get_current_user)):
+
+        if user.vai_tro not in allowed_roles:
+            raise HTTPException(
+                status_code=403,
+                detail="Không có quyền truy cập"
+            )
+
+        return user
+
+    return role_checker
