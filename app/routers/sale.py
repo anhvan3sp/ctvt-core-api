@@ -15,4 +15,4 @@ def create_sale(
     db: Session = Depends(get_db),
     user = Depends(require_roles(["admin", "nv_dac_biet"]))
 ):
-    return create_hoa_don_ban(db, data, user.ma_nv)
+    return create_hoa_don_ban(db, data, user)
