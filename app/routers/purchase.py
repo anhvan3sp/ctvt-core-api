@@ -7,7 +7,7 @@ from app.schemas import HoaDonNhapCreate, HoaDonNhapResponse
 from app.services import create_hoa_don_nhap
 from app.auth_utils import get_current_user
 from app.models import HoaDonNhap
-
+from app.auth_utils import require_roles
 router = APIRouter(prefix="/purchase", tags=["Purchase"])
 
 
