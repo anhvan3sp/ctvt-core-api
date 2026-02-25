@@ -4,10 +4,10 @@ from typing import Dict, Any
 
 from jose import jwt, JWTError
 from passlib.context import CryptContext
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
-from fastapi import Header
+
 from app.database import get_db
 from app.models import NhanVien
 
@@ -64,28 +64,29 @@ def create_access_token(data: Dict[str, Any]) -> str:
 
 
 # ==============================
-# CURRENT USER
+# CURRENT USER (OAuth2 chuẩn)
 # ==============================
 
 def get_current_user(
-    authorization: str = Header(...),
+    token: str = Depends(oauth2_scheme),
     db: Session = Depends(get_db)
 ):
 
-    if not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Thiếu token")
-
-    token = authorization.split(" ")[1]
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Token không hợp lệ",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
 
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         ma_nv: str = payload.get("sub")
 
         if ma_nv is None:
-            raise HTTPException(status_code=401, detail="Token không hợp lệ")
+            raise credentials_exception
 
     except JWTError:
-        raise HTTPException(status_code=401, detail="Token không hợp lệ")
+        raise credentials_exception
 
     user = db.query(NhanVien).filter(
         NhanVien.ma_nv == ma_nv,
@@ -93,9 +94,14 @@ def get_current_user(
     ).first()
 
     if not user:
-        raise HTTPException(status_code=401, detail="User không tồn tại")
+        raise credentials_exception
 
     return user
+
+
+# ==============================
+# ROLE CHECK
+# ==============================
 
 def require_roles(allowed_roles: list):
 
