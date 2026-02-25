@@ -431,3 +431,150 @@ Hoàn thiện báo cáo công nợ chi tiết
 Chặn bán nếu nợ vượt hạn mức
 
 Hoàn thiện phân quyền theo role thực chiến
+NHẬT KÝ CTVT CORE API
+
+📅 Ngày: 25-02-2026
+Giai đoạn: Ổn định Core – Fix lỗi kiến trúc & Test nghiệp vụ
+
+🎯 Mục tiêu hôm nay
+
+Sửa lỗi runtime trên Render
+
+Ổn định cơ chế Auth
+
+Fix lỗi truyền sai kiểu dữ liệu vào service
+
+Test lại hóa đơn nhập / bán
+
+Kiểm tra nhật ký kho
+
+✅ ĐÃ HOÀN THÀNH
+1️⃣ Fix lỗi kiến trúc Router → Service
+
+Lỗi gặp:
+
+AttributeError: 'str' object has no attribute 'ma_nv'
+
+Nguyên nhân:
+
+Router truyền user.ma_nv (string)
+Trong khi service yêu cầu user object.
+
+Đã sửa:
+
+purchase.py
+
+sale.py
+
+Thay:
+
+create_hoa_don_xxx(db, data, user.ma_nv)
+
+Bằng:
+
+create_hoa_don_xxx(db, data, user)
+
+Kiến trúc hiện tại đã đúng chuẩn:
+
+Router xử lý auth
+
+Service nhận user object
+
+Service dùng user.ma_nv & user.vai_tro
+
+2️⃣ Test Hóa Đơn Nhập
+
+✔ Tạo hóa đơn nhập thành công
+✔ Ghi hoa_don_nhap_chi_tiet đúng
+✔ Ghi nhat_ky_kho với:
+
+loai = nhap
+
+id_tham_chieu đúng
+
+số lượng đúng
+
+3️⃣ Test Hóa Đơn Bán
+
+✔ Kiểm tra tồn kho realtime bằng SUM()
+✔ Không cho bán nếu vượt tồn
+✔ Trừ tồn đúng
+✔ Ghi nhat_ky_kho:
+
+loai = xuat
+
+liên kết đúng hóa đơn
+
+4️⃣ Kiểm tra Nhật Ký Kho
+
+Nhập → tăng kho
+Bán → giảm kho
+
+Tồn kho tính chính xác theo:
+
+SUM(nhap) - SUM(xuat)
+
+Cơ chế tồn kho realtime hoạt động ổn định.
+
+📊 Trạng thái hệ thống hiện tại
+Module	Trạng thái
+Deploy Render	✅ Ổn
+Authentication	✅ Hoạt động
+Phân quyền role	✅ OK
+Purchase API	✅ OK
+Sale API	✅ OK
+Nhật ký kho	✅ Chính xác
+Transaction rollback	✅ Hoạt động
+🧠 Đánh giá kỹ thuật
+
+Hệ thống đã chuyển từ:
+
+“API CRUD thử nghiệm”
+
+Sang:
+
+“Core ERP mini có logic tồn kho & tài chính thật”
+
+Điểm quan trọng hôm nay:
+
+Kiến trúc Router → Service được chuẩn hóa
+
+Không còn lỗi kiểu dữ liệu
+
+Transaction hoạt động đúng
+
+Không âm kho
+
+Không ghi sai sổ
+
+Core đang ổn định.
+
+🎯 Kế hoạch ngày mai (nếu tiếp tục)
+
+Test quỹ công ty
+
+Test quỹ nhân viên đặc biệt
+
+Kiểm tra bảng thu_chi
+
+Test rollback khi lỗi tiền
+
+Viết README chuẩn hóa kiến trúc
+
+🔒 Nhận định
+
+Hệ thống Core giai đoạn 1 đã:
+
+Chạy thật
+
+Kết nối DB thật
+
+Ghi sổ thật
+
+Xử lý nghiệp vụ thật
+
+Từ đây trở đi chỉ còn tinh chỉnh.
+
+Hôm nay dừng đúng lúc.
+
+Core đang đi đúng hướng.
