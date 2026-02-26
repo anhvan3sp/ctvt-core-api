@@ -9,6 +9,7 @@ from app.models import ThuChi, HoaDonBan, HoaDonNhap
 from app.auth_utils import require_roles, get_current_user
 from app.schemas import ThuChiCreate, ThuChiResponse, NopQuyRequest
 
+
 router = APIRouter(prefix="/finance", tags=["Finance"])
 
 
@@ -231,3 +232,75 @@ def bao_cao_hom_nay(
         "thu_chi_trong_ngay": thu_chi,
         "so_du_quy_nhan_vien": Decimal(str(tong))
     }
+    
+
+def tinh_bao_cao_ngay(db: Session, ma_nv: str, ngay: date):
+
+    tong_nhap = db.query(func.sum(Purchase.tong_tien)).filter(
+        Purchase.ma_nv == ma_nv,
+        Purchase.ngay == ngay
+    ).scalar() or 0
+
+    tong_ban = db.query(func.sum(Sale.tong_tien)).filter(
+        Sale.ma_nv == ma_nv,
+        Sale.ngay == ngay
+    ).scalar() or 0
+
+    tong_thu = db.query(func.sum(ThuChi.so_tien)).filter(
+        ThuChi.ma_nv == ma_nv,
+        ThuChi.loai == "thu",
+        ThuChi.ngay == ngay
+    ).scalar() or 0
+
+    tong_chi = db.query(func.sum(ThuChi.so_tien)).filter(
+        ThuChi.ma_nv == ma_nv,
+        ThuChi.loai == "chi",
+        ThuChi.ngay == ngay
+    ).scalar() or 0
+
+    return {
+        "ma_nv": ma_nv,
+        "ngay": ngay,
+        "tong_nhap": tong_nhap,
+        "tong_ban": tong_ban,
+        "tong_thu": tong_thu,
+        "tong_chi": tong_chi,
+        "chenh_lech_tien_mat": tong_thu - tong_chi
+    }
+
+@router.get("/admin/bao-cao-ngay/{ma_nv}")
+def admin_xem_bao_cao(
+    ma_nv: str,
+    ngay: date,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Chỉ admin được phép")
+
+    return tinh_bao_cao_ngay(db, ma_nv, ngay)
+   
+@router.get("/bao-cao-ngay")
+def bao_cao_ngay_nhan_vien(
+    ngay: date,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+
+    if current_user.role != "nhan_vien":
+        raise HTTPException(status_code=403, detail="Không có quyền")
+
+    return tinh_bao_cao_ngay(db, current_user.ma_nv, ngay)
+
+@router.get("/admin/quy/{ma_nv}")
+def admin_xem_quy_nhan_vien(
+    ma_nv: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Chỉ admin được phép")
+
+    return get_quy_nhan_vien(ma_nv, db)
