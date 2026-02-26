@@ -66,7 +66,7 @@ def get_thu_chi_list(
 def nop_quy(
     data: NopQuyRequest,
     db: Session = Depends(get_db),
-    user = Depends(require_roles(["nv_dac_biet"]))
+    user = Depends(require_roles(["nv_dac_biet","admin"]))
 ):
 
     if data.so_tien <= 0:
