@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+
+from sqlalchemy import func, case
 from decimal import Decimal
 from datetime import datetime
 
@@ -127,17 +128,18 @@ def xem_quy_cong_ty(
 ):
 
     tong = db.query(
-        func.coalesce(
-            func.sum(
-                func.case(
-                    (ThuChi.loai == "thu", ThuChi.so_tien),
-                    else_=-ThuChi.so_tien
+    func.coalesce(
+        func.sum(
+            case(
+                (ThuChi.loai == "thu", ThuChi.so_tien),
+                else_=-ThuChi.so_tien
                 )
             ), 0
         )
     ).filter(
         ThuChi.doi_tuong == "cong_ty"
     ).scalar()
+    
 
     return {"quy_cong_ty": Decimal(str(tong))}
 
