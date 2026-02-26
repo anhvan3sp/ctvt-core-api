@@ -578,3 +578,122 @@ Từ đây trở đi chỉ còn tinh chỉnh.
 Hôm nay dừng đúng lúc.
 
 Core đang đi đúng hướng.
+📘 NHẬT KÝ DỰ ÁN CTVT CORE
+
+📅 Ngày: 26/02/2026
+
+1️⃣ Backend – Hoàn thiện mức Beta
+✅ Hoàn thành
+
+Ổn định module Finance
+
+Sửa toàn bộ endpoint báo cáo:
+
+Không cần nhập ngày
+
+Mặc định lấy ngày hiện tại
+
+Chuẩn hóa:
+
+HoaDonBan
+
+HoaDonNhap
+
+ThuChi
+
+🔒 Tự động khóa dữ liệu theo ngày
+
+Đã triển khai trigger MySQL:
+
+Khóa UPDATE dữ liệu ngày cũ
+
+Khóa DELETE dữ liệu ngày cũ
+
+Áp dụng cho:
+
+thu_chi
+
+hoa_don_ban
+
+hoa_don_nhap
+
+→ Hệ thống tự động chốt ngày
+→ Không phụ thuộc Render
+→ Không cần chốt thủ công
+
+📊 Báo cáo hôm nay
+
+Hoàn thiện endpoint:
+
+/finance/bao-cao-hom-nay
+
+Tự động lấy date.today()
+
+Trả:
+
+Hóa đơn bán hôm nay
+
+Hóa đơn nhập hôm nay
+
+Thu chi hôm nay
+
+Số dư quỹ nhân viên realtime
+
+Admin có thể xem báo cáo của từng nhân viên.
+
+🎯 Đánh giá hệ thống hiện tại
+
+API đạt mức: Beta sử dụng nội bộ
+
+Độ ổn định ước tính: ~85%
+
+Đủ điều kiện bắt đầu xây dựng Web
+
+2️⃣ Quyết định kiến trúc frontend
+
+Chọn stack:
+
+React
+
+Vite
+
+TailwindCSS
+
+Lý do:
+
+Phù hợp hệ thống quản lý
+
+Dễ mở rộng
+
+Có thể nâng cấp thành app sau này
+
+Không phụ thuộc template xấu
+
+3️⃣ Kế hoạch tiếp theo
+
+Tuần 1 tập trung:
+
+Tạo project React + Vite
+
+Cấu hình Tailwind
+
+Làm trang Login
+
+Làm Dashboard cơ bản
+
+Kết nối API thật
+
+Không làm đẹp trước.
+Chỉ tập trung chạy được nghiệp vụ.
+
+📌 Tổng kết hôm nay
+
+Backend đạt mốc Beta
+
+Tự động chốt ngày thành công
+
+Quyết định hướng phát triển Web
+
+Không mở rộng thêm backend để tránh phân tán
+
+Nếu sếp muốn, em có thể viết thêm một bản nhật ký theo kiểu “chiến lược dài hạn 3 tháng” để định hướng dự án rõ ràng hơn.
