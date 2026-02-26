@@ -1,110 +1,243 @@
-CTVT Core API
+CTVT CORE API
 
-Core API phục vụ vận hành công ty gas CTVT.
-Mục tiêu giai đoạn 1: xây dựng hệ thống nhập – bán – tồn kho tối giản, chạy ổn định.
+Backend vận hành nội bộ cho công ty gas CTVT.
+Hệ thống phục vụ nhập hàng – bán hàng – tồn kho – tài chính cơ bản.
 
-🎯 Mục tiêu phiên bản 1 (Core)
+Trạng thái hiện tại: Beta nội bộ – đang sử dụng thật
 
-Đăng nhập nhân viên
+🎯 Mục tiêu hệ thống
 
-Nhập hàng (hóa đơn nhập)
+Xây dựng một Core ERP mini với các tiêu chí:
 
-Bán hàng (hóa đơn bán)
+Ổn định
 
-Quản lý tồn kho
+Chính xác dữ liệu
 
-Xem danh sách hóa đơn
+Không âm kho
 
-Không bao gồm:
+Có transaction đầy đủ
 
-Chốt ngày
+Không phụ thuộc thao tác thủ công
 
-Thu chi nâng cao
+Không hướng tới phức tạp hóa giai đoạn đầu.
 
-VAT
-
-Báo cáo kế toán
-
-Snapshot tồn kho
-
-🏗 Kiến trúc
+🏗 Kiến trúc hệ thống
 
 Backend: FastAPI
-
-Database: MySQL (Aiven)
-
+Database: MySQL (Aiven Cloud)
 ORM: SQLAlchemy
-
+Authentication: JWT
 Deploy: Render
 
-📦 Phạm vi API (Giai đoạn 1)
-Authentication
+Kiến trúc phân tầng:
 
-POST /login
+Router → Service → Database
 
-Purchase (Nhập hàng)
+Nguyên tắc:
 
-POST /purchase
+Router chỉ xử lý request và auth
 
-GET /purchase
+Business logic nằm trong services.py
 
-Sale (Bán hàng)
+Mọi thao tác tạo hóa đơn đều nằm trong transaction
 
-POST /sale
+📂 Cấu trúc thư mục thực tế
+ctvt-core-api/
+│
+├── app/
+│   ├── main.py
+│   ├── database.py
+│   ├── models.py
+│   ├── schemas.py
+│   ├── auth_utils.py
+│   │
+│   ├── routers/
+│   │   ├── auth.py
+│   │   ├── purchase.py
+│   │   ├── sale.py
+│   │   └── finance.py
+│   │
+│   └── services.py
+│
+├── requirements.txt
+├── runtime.txt
+├── README.md
+└── DEV_STATUS.md
 
-GET /sale
+Lưu ý:
 
-GET /sale/{id}
+Không có file inventory.py riêng.
 
-Inventory
+Tồn kho được tính realtime từ bảng nhat_ky_kho.
 
-GET /inventory
+🔐 Authentication
 
-🧠 Nguyên tắc vận hành
-
-Tất cả tạo hóa đơn phải nằm trong transaction.
-
-Không thay đổi cấu trúc database hiện tại.
-
-Không thêm tính năng ngoài phạm vi core.
-
-Mỗi ngày chỉ hoàn thành 1 nhóm chức năng.
-
-Mỗi thay đổi phải commit rõ ràng trên GitHub.
-
-📅 Kế hoạch hoàn thành
-
-Day 1:
-
-Setup project
-
-Kết nối database
+Sử dụng JWT (JSON Web Token).
 
 Login
 
-Day 2:
+POST /auth/login
 
-API nhập hàng
+Trả về:
 
-Day 3:
+{
+  "access_token": "...",
+  "token_type": "bearer"
+}
 
-API bán hàng
+Các API protected yêu cầu header:
 
-Day 4:
+Authorization: Bearer <access_token>
 
-API tồn kho
+Token chứa:
 
-Day 5:
+ma_nv
 
-Test tổng thể + deploy
+vai_tro
 
-🚀 Trạng thái hiện tại
+📦 API Modules
+1️⃣ Purchase – Nhập hàng
 
-Đang triển khai phiên bản Core.
+POST /purchase
+GET /purchase
+
+Khi tạo hóa đơn nhập:
+
+Tạo hoa_don_nhap
+
+Tạo hoa_don_nhap_chi_tiet
+
+Ghi nhat_ky_kho (loai = nhap)
+
+Toàn bộ nằm trong transaction.
+
+Rollback nếu có lỗi.
+
+2️⃣ Sale – Bán hàng
+
+POST /sale
+GET /sale
+GET /sale/{id}
+
+Logic:
+
+Kiểm tra tồn kho realtime bằng SUM()
+
+Không cho bán nếu tồn không đủ
+
+Ghi nhat_ky_kho (loai = xuat)
+
+Tính tong_tien bằng Decimal
+
+Không lưu tồn snapshot.
+Tồn kho tính động từ nhat_ky_kho.
+
+3️⃣ Finance – Tài chính cơ bản
+
+Bao gồm:
+
+Quỹ công ty
+
+Quỹ nhân viên đặc biệt
+
+Báo cáo hôm nay
+
+Công nợ khách hàng
+
+Nộp quỹ
+
+Close day
+
+Hệ thống có trigger MySQL để:
+
+Khóa UPDATE dữ liệu ngày cũ
+
+Khóa DELETE dữ liệu ngày cũ
+
+Dữ liệu tài chính không thể sửa sau khi qua ngày.
+
+📊 Cách tính tồn kho
+
+Tồn kho không lưu trực tiếp.
+
+Công thức:
+
+SUM(nhap) - SUM(xuat)
+
+Nguồn dữ liệu: bảng nhat_ky_kho.
+
+Ưu điểm:
+
+Không sai lệch tồn
+
+Không cần đồng bộ snapshot
+
+Không lệ thuộc cache
+
+🧠 Nguyên tắc kỹ thuật
+
+Mọi hóa đơn phải nằm trong transaction.
+
+Không cho âm kho.
+
+Không đặt business logic trong router.
+
+Không sửa dữ liệu ngày cũ.
+
+Không thêm tính năng ngoài phạm vi cần thiết.
+
+Ưu tiên chính xác hơn tối ưu sớm.
+
+⚙️ Thiết lập môi trường
+
+Yêu cầu:
+
+Python 3.11 (bắt buộc do tương thích bcrypt)
+
+Cài thư viện:
+
+pip install -r requirements.txt
+
+Chạy local:
+
+uvicorn app.main:app --reload
+
+Production (Render):
+
+uvicorn app.main:app --host 0.0.0.0 --port 10000
+📌 Trạng thái hệ thống hiện tại
+Module	Trạng thái
+Deploy	Ổn định
+Database	Kết nối OK
+Authentication	Hoàn tất
+Purchase	Hoạt động
+Sale	Hoạt động
+Finance	Gần hoàn chỉnh
+Transaction	Ổn định
+Rollback	Hoạt động
+
+Độ ổn định ước tính: ~85–90% (Beta nội bộ)
+
+🚀 Định hướng tiếp theo
+
+Giai đoạn tiếp theo:
+
+Xây dựng frontend bằng React + Vite
+
+Kết nối API thật
+
+Hoàn thiện dashboard
+
+Chuẩn hóa phân quyền nâng cao
+
+Viết tài liệu API cho frontend
+
+Không mở rộng backend thêm trước khi frontend ổn định.
 
 🔒 Lưu ý
 
-Đây là hệ thống vận hành thực tế của công ty.
+Đây là hệ thống vận hành nội bộ thật.
+
 Ưu tiên:
 
 Ổn định
@@ -113,26 +246,6 @@ Test tổng thể + deploy
 
 Không phức tạp hóa
 
-Nâng cấp sẽ thực hiện sau khi hệ thống core chạy ổn định tối thiểu 2 tuần.
+Không refactor lớn khi chưa cần
 
-cây thư mục dự kiến làm:
-ctvt-core-api/
-│
-├── app/
-│   ├── main.py
-│   ├── database.py
-│   ├── models.py
-│   ├── schemas.py
-│   │
-│   ├── routers/
-│   │   ├── auth.py
-│   │   ├── purchase.py
-│   │   ├── sale.py
-│   │   └── inventory.py
-│   │
-│   └── services.py
-│
-├── requirements.txt
-├── README.md
-└── DEV_STATUS.md
-
+Mọi nâng cấp lớn chỉ thực hiện khi hệ thống core chạy ổn định tối thiểu 2 tuần.
