@@ -1,70 +1,78 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from datetime import date, datetime
 from decimal import Decimal
+from datetime import datetime
 
 from app.database import get_db
 from app.models import ThuChi
-from app.auth_utils import require_roles
-from app.models import HoaDonBan
+from app.auth_utils import require_roles, get_current_user
+from app.schemas import ThuChiCreate, ThuChiResponse, NopQuyRequest
+
 router = APIRouter(prefix="/finance", tags=["Finance"])
 
 
 # =====================================================
-# XEM QUỸ CÔNG TY (TIỀN MẶT + NGÂN HÀNG)
+# TẠO THU CHI THỦ CÔNG
 # =====================================================
-@router.get("/quy-cong-ty")
-def xem_quy_cong_ty(
+@router.post("/thu-chi", response_model=ThuChiResponse)
+def create_thu_chi(
+    data: ThuChiCreate,
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user)
+):
+    """
+    - Admin, kế toán: ghi cho công ty
+    - nv_dac_biet: ghi cho chính mình
+    """
+
+    doi_tuong = data.doi_tuong
+
+    if user.vai_tro == "nv_dac_biet":
+        doi_tuong = "nhan_vien"
+
+    thu_chi = ThuChi(
+        ngay=data.ngay,
+        doi_tuong=doi_tuong,
+        ma_nv=user.ma_nv,
+        so_tien=data.so_tien,
+        loai=data.loai,
+        hinh_thuc=data.hinh_thuc,
+        noi_dung=data.noi_dung
+    )
+
+    db.add(thu_chi)
+    db.commit()
+    db.refresh(thu_chi)
+
+    return thu_chi
+
+
+# =====================================================
+# DANH SÁCH THU CHI
+# =====================================================
+@router.get("/thu-chi", response_model=list[ThuChiResponse])
+def get_thu_chi_list(
     db: Session = Depends(get_db),
     user = Depends(require_roles(["admin", "ke_toan"]))
 ):
-
-    # Tiền mặt công ty
-    thu_tm = db.query(func.coalesce(func.sum(ThuChi.so_tien), 0)).filter(
-        ThuChi.doi_tuong == "cong_ty",
-        ThuChi.hinh_thuc == "tien_mat",
-        ThuChi.loai == "thu"
-    ).scalar()
-
-    chi_tm = db.query(func.coalesce(func.sum(ThuChi.so_tien), 0)).filter(
-        ThuChi.doi_tuong == "cong_ty",
-        ThuChi.hinh_thuc == "tien_mat",
-        ThuChi.loai == "chi"
-    ).scalar()
-
-    # Ngân hàng công ty
-    thu_ck = db.query(func.coalesce(func.sum(ThuChi.so_tien), 0)).filter(
-        ThuChi.doi_tuong == "cong_ty",
-        ThuChi.hinh_thuc == "chuyen_khoan",
-        ThuChi.loai == "thu"
-    ).scalar()
-
-    chi_ck = db.query(func.coalesce(func.sum(ThuChi.so_tien), 0)).filter(
-        ThuChi.doi_tuong == "cong_ty",
-        ThuChi.hinh_thuc == "chuyen_khoan",
-        ThuChi.loai == "chi"
-    ).scalar()
-
-    return {
-        "tien_mat_cong_ty": Decimal(str(thu_tm)) - Decimal(str(chi_tm)),
-        "tien_ngan_hang_cong_ty": Decimal(str(thu_ck)) - Decimal(str(chi_ck))
-    }
+    return db.query(ThuChi).order_by(ThuChi.id.desc()).all()
 
 
 # =====================================================
-# NỘP QUỸ NHÂN VIÊN
+# NỘP QUỸ (nv_dac_biet → công ty)
 # =====================================================
 @router.post("/nop-quy")
 def nop_quy(
-    so_tien: float,
+    data: NopQuyRequest,
     db: Session = Depends(get_db),
     user = Depends(require_roles(["nv_dac_biet"]))
 ):
 
-    so_tien = Decimal(str(so_tien))
+    if data.so_tien <= 0:
+        raise HTTPException(status_code=400, detail="Số tiền phải > 0")
 
-    # Kiểm tra số dư nhân viên
+    # Tính số dư nhân viên
     thu = db.query(func.coalesce(func.sum(ThuChi.so_tien), 0)).filter(
         ThuChi.doi_tuong == "nhan_vien",
         ThuChi.ma_nv == user.ma_nv,
@@ -79,29 +87,29 @@ def nop_quy(
 
     so_du = Decimal(str(thu)) - Decimal(str(chi))
 
-    if so_tien > so_du:
-        raise HTTPException(status_code=400, detail="Quỹ không đủ để nộp")
+    if data.so_tien > so_du:
+        raise HTTPException(status_code=400, detail="Quỹ không đủ")
 
     # Trừ quỹ nhân viên
     db.add(ThuChi(
         ngay=datetime.utcnow(),
         doi_tuong="nhan_vien",
         ma_nv=user.ma_nv,
-        so_tien=so_tien,
+        so_tien=data.so_tien,
         loai="chi",
-        hinh_thuc="tien_mat",
+        hinh_thuc=data.hinh_thuc,
         noi_dung="Nộp quỹ về công ty"
     ))
 
-    # Cộng quỹ công ty tiền mặt
+    # Cộng quỹ công ty
     db.add(ThuChi(
         ngay=datetime.utcnow(),
         doi_tuong="cong_ty",
         ma_nv=user.ma_nv,
-        so_tien=so_tien,
+        so_tien=data.so_tien,
         loai="thu",
-        hinh_thuc="tien_mat",
-        noi_dung="Nhận tiền mặt từ nhân viên"
+        hinh_thuc=data.hinh_thuc,
+        noi_dung="Nhận tiền từ nhân viên"
     ))
 
     db.commit()
@@ -110,86 +118,51 @@ def nop_quy(
 
 
 # =====================================================
-# CHỐT QUỸ (TỔNG THU CHI)
+# QUỸ CÔNG TY REALTIME
 # =====================================================
-@router.post("/close-day")
-def close_day(
+@router.get("/quy-cong-ty")
+def xem_quy_cong_ty(
     db: Session = Depends(get_db),
     user = Depends(require_roles(["admin", "ke_toan"]))
 ):
 
-    tong_thu = db.query(func.coalesce(func.sum(ThuChi.so_tien), 0)).filter(
-        ThuChi.loai == "thu"
+    tong = db.query(
+        func.coalesce(
+            func.sum(
+                func.case(
+                    (ThuChi.loai == "thu", ThuChi.so_tien),
+                    else_=-ThuChi.so_tien
+                )
+            ), 0
+        )
+    ).filter(
+        ThuChi.doi_tuong == "cong_ty"
     ).scalar()
 
-    tong_chi = db.query(func.coalesce(func.sum(ThuChi.so_tien), 0)).filter(
-        ThuChi.loai == "chi"
-    ).scalar()
-
-    return {
-        "ngay": date.today(),
-        "tong_thu": tong_thu,
-        "tong_chi": tong_chi,
-        "chenh_lech": Decimal(str(tong_thu)) - Decimal(str(tong_chi))
-    }
+    return {"quy_cong_ty": Decimal(str(tong))}
 
 
-
-@router.get("/cong-no/{ma_kh}")
-def bao_cao_cong_no(
-    ma_kh: str,
+# =====================================================
+# QUỸ NHÂN VIÊN (CHÍNH MÌNH)
+# =====================================================
+@router.get("/quy-nhan-vien")
+def xem_quy_nhan_vien(
     db: Session = Depends(get_db),
-    user = Depends(require_roles(["admin", "ke_toan"]))
+    user = Depends(get_current_user)
 ):
 
-    # Tổng tiền bán
-    tong_ban = db.query(
-        func.coalesce(func.sum(HoaDonBan.tong_tien), 0)
+    tong = db.query(
+        func.coalesce(
+            func.sum(
+                func.case(
+                    (ThuChi.loai == "thu", ThuChi.so_tien),
+                    else_=-ThuChi.so_tien
+                )
+            ), 0
+        )
     ).filter(
-        HoaDonBan.ma_kh == ma_kh,
-        HoaDonBan.trang_thai != "huy"
+        ThuChi.doi_tuong == "nhan_vien",
+        ThuChi.ma_nv == user.ma_nv
     ).scalar()
 
-    # Tổng đã thanh toán
-    tong_da_thu = db.query(
-        func.coalesce(func.sum(HoaDonBan.tong_tien - HoaDonBan.no_lai), 0)
-    ).filter(
-        HoaDonBan.ma_kh == ma_kh,
-        HoaDonBan.trang_thai != "huy"
-    ).scalar()
-
-    tong_no = Decimal(str(tong_ban)) - Decimal(str(tong_da_thu))
-
-    return {
-        "ma_kh": ma_kh,
-        "tong_ban": tong_ban,
-        "tong_da_thu": tong_da_thu,
-        "tong_con_no": tong_no
-    }
-
-@router.get("/cong-no")
-def bao_cao_cong_no_toan_bo(
-    db: Session = Depends(get_db),
-    user = Depends(require_roles(["admin", "ke_toan"]))
-):
-
-    results = db.query(
-        HoaDonBan.ma_kh,
-        func.coalesce(func.sum(HoaDonBan.tong_tien), 0).label("tong_ban"),
-        func.coalesce(func.sum(HoaDonBan.no_lai), 0).label("tong_no")
-    ).filter(
-        HoaDonBan.trang_thai != "huy"
-    ).group_by(
-        HoaDonBan.ma_kh
-    ).all()
-
-    data = []
-
-    for r in results:
-        data.append({
-            "ma_kh": r.ma_kh,
-            "tong_ban": r.tong_ban,
-            "tong_con_no": r.tong_no
-        })
-
-    return data
+    return {"quy_nhan_vien": Decimal(str(tong))}
