@@ -166,3 +166,64 @@ def xem_quy_nhan_vien(
     ).scalar()
 
     return {"quy_nhan_vien": Decimal(str(tong))}
+
+@router.post("/chu-gop-tien")
+def chu_gop_tien(
+    so_tien: Decimal,
+    hinh_thuc: str,
+    db: Session = Depends(get_db),
+    user = Depends(require_roles(["admin"]))
+):
+
+    if so_tien <= 0:
+        raise HTTPException(status_code=400, detail="Số tiền phải > 0")
+
+    db.add(ThuChi(
+        ngay=datetime.utcnow(),
+        doi_tuong="cong_ty",
+        ma_nv=user.ma_nv,
+        so_tien=so_tien,
+        loai="thu",
+        hinh_thuc=hinh_thuc,
+        noi_dung="Chủ góp thêm tiền"
+    ))
+
+    db.commit()
+
+    return {"message": "Góp tiền thành công"}
+
+@router.post("/chuyen-noi-bo")
+def chuyen_noi_bo(
+    so_tien: Decimal,
+    db: Session = Depends(get_db),
+    user = Depends(require_roles(["admin"]))
+):
+
+    if so_tien <= 0:
+        raise HTTPException(status_code=400, detail="Số tiền phải > 0")
+
+    # Giảm tiền mặt
+    db.add(ThuChi(
+        ngay=datetime.utcnow(),
+        doi_tuong="cong_ty",
+        ma_nv=user.ma_nv,
+        so_tien=so_tien,
+        loai="chi",
+        hinh_thuc="tien_mat",
+        noi_dung="Chuyển tiền mặt vào ngân hàng"
+    ))
+
+    # Tăng tiền ngân hàng
+    db.add(ThuChi(
+        ngay=datetime.utcnow(),
+        doi_tuong="cong_ty",
+        ma_nv=user.ma_nv,
+        so_tien=so_tien,
+        loai="thu",
+        hinh_thuc="chuyen_khoan",
+        noi_dung="Nhận tiền từ tiền mặt"
+    ))
+
+    db.commit()
+
+    return {"message": "Chuyển nội bộ thành công"}
