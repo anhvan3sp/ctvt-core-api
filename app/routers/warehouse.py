@@ -9,11 +9,7 @@ router = APIRouter(
     prefix="/warehouses",
     tags=["Warehouses"]
 )
-@router.get("/", response_model=List[schemas.WarehouseResponse])
 
+@router.get("/", response_model=List[schemas.WarehouseResponse])
 def get_warehouses(db: Session = Depends(get_db)):
-    """
-    Lấy toàn bộ kho
-    """
-    warehouses = db.query(models.Warehouse).all()
-    return warehouses
+    return db.query(models.KhoHang).all()
