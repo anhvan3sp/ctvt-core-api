@@ -2,6 +2,26 @@ from pydantic import BaseModel, Field
 from typing import List, Optional
 from datetime import date, datetime
 from decimal import Decimal
+from enum import Enum
+
+
+# =====================================================
+# ENUMS (KHÓA GIÁ TRỊ)
+# =====================================================
+
+class LoaiThuChi(str, Enum):
+    thu = "thu"
+    chi = "chi"
+
+
+class HinhThuc(str, Enum):
+    tien_mat = "tien_mat"
+    chuyen_khoan = "chuyen_khoan"
+
+
+class DoiTuong(str, Enum):
+    cong_ty = "cong_ty"
+    nhan_vien = "nhan_vien"
 
 
 # =====================================================
@@ -33,7 +53,7 @@ class SupplierResponse(SupplierBase):
     id: int
 
     class Config:
-        from_attributes = True
+        orm_mode = True
 
 
 class WarehouseBase(BaseModel):
@@ -45,7 +65,7 @@ class WarehouseResponse(WarehouseBase):
     id: int
 
     class Config:
-        from_attributes = True
+        orm_mode = True
 
 
 class ProductBase(BaseModel):
@@ -57,7 +77,7 @@ class ProductResponse(ProductBase):
     id: int
 
     class Config:
-        from_attributes = True
+        orm_mode = True
 
 
 # =====================================================
@@ -74,8 +94,8 @@ class HoaDonNhapCreate(BaseModel):
     ngay: date
     ma_ncc: str
     ma_kho: str
-    tien_mat: Decimal = 0
-    tien_ck: Decimal = 0
+    tien_mat: Decimal = Decimal("0")
+    tien_ck: Decimal = Decimal("0")
     items: List[HoaDonNhapItemCreate]
 
 
@@ -88,7 +108,7 @@ class HoaDonNhapResponse(BaseModel):
     tong_tien: Decimal
 
     class Config:
-        from_attributes = True
+        orm_mode = True
 
 
 # =====================================================
@@ -105,8 +125,8 @@ class HoaDonBanCreate(BaseModel):
     ngay: date
     ma_kh: str
     ma_kho: str
-    tien_mat: Decimal = 0
-    tien_ck: Decimal = 0
+    tien_mat: Decimal = Decimal("0")
+    tien_ck: Decimal = Decimal("0")
     items: List[HoaDonBanItemCreate]
 
 
@@ -119,7 +139,7 @@ class HoaDonBanResponse(BaseModel):
     tong_tien: Decimal
 
     class Config:
-        from_attributes = True
+        orm_mode = True
 
 
 # =====================================================
@@ -128,10 +148,10 @@ class HoaDonBanResponse(BaseModel):
 
 class ThuChiCreate(BaseModel):
     ngay: datetime
-    doi_tuong: str  # "cong_ty" hoặc "nhan_vien"
+    doi_tuong: DoiTuong
     so_tien: Decimal
-    loai: str       # "thu" hoặc "chi"
-    hinh_thuc: str  # "tien_mat" hoặc "chuyen_khoan"
+    loai: LoaiThuChi
+    hinh_thuc: HinhThuc
     noi_dung: str
 
 
@@ -140,7 +160,7 @@ class ThuChiResponse(ThuChiCreate):
     ma_nv: Optional[str] = None
 
     class Config:
-        from_attributes = True
+        orm_mode = True
 
 
 # =====================================================
@@ -149,4 +169,4 @@ class ThuChiResponse(ThuChiCreate):
 
 class NopQuyRequest(BaseModel):
     so_tien: Decimal
-    hinh_thuc: str  # "tien_mat" hoặc "chuyen_khoan"
+    hinh_thuc: HinhThuc
