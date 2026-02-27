@@ -7,7 +7,7 @@ from app.routers import auth, purchase, sale
 from app.auth_utils import get_password_hash
 from app.routers import stock
 from app.routers import finance
-
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
 
@@ -47,3 +47,18 @@ def test_db(db: Session = Depends(get_db)):
 @app.get("/create-hash")
 def create_hash():
     return {"hash": get_password_hash("123abc")}
+
+
+
+origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
