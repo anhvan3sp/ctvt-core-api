@@ -9,8 +9,8 @@ router = APIRouter(
     prefix="/products",
     tags=["Products"]
 )
+@router.get("/", response_model=List[schemas.ProductResponse])
 
-@router.get("/", response_model=List[schemas.Product])
 def get_products(db: Session = Depends(get_db)):
     """
     Lấy toàn bộ sản phẩm
