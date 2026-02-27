@@ -12,9 +12,5 @@ router = APIRouter(
 
 @router.get("/", response_model=List[schemas.SupplierResponse])
 def get_suppliers(db: Session = Depends(get_db)):
-    """
-    Lấy toàn bộ nhà cung cấp
-    Dùng cho dropdown frontend
-    """
     suppliers = db.query(models.Supplier).all()
     return suppliers
