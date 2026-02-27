@@ -1,8 +1,12 @@
 from pydantic import BaseModel, Field
-from typing import List
-from datetime import date
+from typing import List, Optional
+from datetime import date, datetime
 from decimal import Decimal
-from datetime import datetime
+
+
+# =====================================================
+# AUTH
+# =====================================================
 
 class LoginRequest(BaseModel):
     ma_nv: str
@@ -16,11 +20,64 @@ class LoginResponse(BaseModel):
     vai_tro: str
 
 
+# =====================================================
+# MASTER DATA
+# =====================================================
+
+class SupplierBase(BaseModel):
+    ma_ncc: str
+    ten_ncc: str
+
+
+class SupplierResponse(SupplierBase):
+    id: int
+
+    class Config:
+        from_attributes = True
+
+
+class WarehouseBase(BaseModel):
+    ma_kho: str
+    ten_kho: str
+
+
+class WarehouseResponse(WarehouseBase):
+    id: int
+
+    class Config:
+        from_attributes = True
+
+
+class ProductBase(BaseModel):
+    ma_sp: str
+    ten_sp: str
+
+
+class ProductResponse(ProductBase):
+    id: int
+
+    class Config:
+        from_attributes = True
+
+
+# =====================================================
+# HÓA ĐƠN NHẬP
+# =====================================================
 
 class HoaDonNhapItemCreate(BaseModel):
     ma_sp: str
-    so_luong: float = Field(..., gt=0)
-    don_gia: float = Field(..., gt=0)
+    so_luong: Decimal = Field(..., gt=0)
+    don_gia: Decimal = Field(..., gt=0)
+
+
+class HoaDonNhapCreate(BaseModel):
+    ngay: date
+    ma_ncc: str
+    ma_kho: str
+    tien_mat: Decimal = 0
+    tien_ck: Decimal = 0
+    items: List[HoaDonNhapItemCreate]
+
 
 class HoaDonNhapResponse(BaseModel):
     id: int
@@ -28,39 +85,46 @@ class HoaDonNhapResponse(BaseModel):
     ma_ncc: str
     ma_nv: str
     ma_kho: str
-    tong_tien: float
+    tong_tien: Decimal
 
     class Config:
         from_attributes = True
 
-class HoaDonNhapCreate(BaseModel):
-    ngay: date
-    ma_ncc: str
-    ma_kho: str
-    tien_mat: float = 0
-    tien_ck: float = 0
-    items: List[HoaDonNhapItemCreate]
+
+# =====================================================
+# HÓA ĐƠN BÁN
+# =====================================================
 
 class HoaDonBanItemCreate(BaseModel):
     ma_sp: str
-    so_luong: float = Field(..., gt=0)
-    don_gia: float = Field(..., gt=0)
+    so_luong: Decimal = Field(..., gt=0)
+    don_gia: Decimal = Field(..., gt=0)
 
 
 class HoaDonBanCreate(BaseModel):
     ngay: date
     ma_kh: str
     ma_kho: str
-    tien_mat: float = 0
-    tien_ck: float = 0
+    tien_mat: Decimal = 0
+    tien_ck: Decimal = 0
     items: List[HoaDonBanItemCreate]
 
 
+class HoaDonBanResponse(BaseModel):
+    id: int
+    ngay: date
+    ma_kh: str
+    ma_nv: str
+    ma_kho: str
+    tong_tien: Decimal
+
+    class Config:
+        from_attributes = True
 
 
-# ==============================
+# =====================================================
 # THU CHI
-# ==============================
+# =====================================================
 
 class ThuChiCreate(BaseModel):
     ngay: datetime
@@ -73,11 +137,15 @@ class ThuChiCreate(BaseModel):
 
 class ThuChiResponse(ThuChiCreate):
     id: int
-    ma_nv: str | None = None
+    ma_nv: Optional[str] = None
 
     class Config:
         from_attributes = True
 
+
+# =====================================================
+# NỘP QUỸ
+# =====================================================
 
 class NopQuyRequest(BaseModel):
     so_tien: Decimal
