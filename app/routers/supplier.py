@@ -12,5 +12,4 @@ router = APIRouter(
 
 @router.get("/", response_model=List[schemas.SupplierResponse])
 def get_suppliers(db: Session = Depends(get_db)):
-    suppliers = db.query(models.Supplier).all()
-    return suppliers
+    return db.query(models.NhaCungCap).all()
