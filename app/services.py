@@ -65,6 +65,32 @@ def create_hoa_don_nhap(db: Session, data: HoaDonNhapCreate, user: NhanVien):
         hoa_don.tong_tien = tong_tien
         hoa_don.tong_thanh_toan = tong_tien
 
+        # ===== XỬ LÝ TIỀN CHI =====
+        tien_mat = Decimal(str(data.tien_mat))
+        tien_ck = Decimal(str(data.tien_ck))
+
+        if tien_mat > 0:
+            db.add(ThuChi(
+                ngay=datetime.utcnow(),
+                doi_tuong="cong_ty",
+                ma_nv=user.ma_nv,
+                so_tien=tien_mat,
+                loai="chi",
+                hinh_thuc="tien_mat",
+                noi_dung=f"Chi tiền mặt nhập hàng HĐ {hoa_don.id}"
+            ))
+
+        if tien_ck > 0:
+            db.add(ThuChi(
+                ngay=datetime.utcnow(),
+                doi_tuong="cong_ty",
+                ma_nv=user.ma_nv,
+                so_tien=tien_ck,
+                loai="chi",
+                hinh_thuc="chuyen_khoan",
+                noi_dung=f"Chi chuyển khoản nhập hàng HĐ {hoa_don.id}"
+            ))
+
         db.commit()
         db.refresh(hoa_don)
         return hoa_don
