@@ -10,7 +10,7 @@ router = APIRouter(
     tags=["Suppliers"]
 )
 
-@router.get("/", response_model=List[schemas.Supplier])
+@router.get("/", response_model=List[schemas.SupplierResponse])
 def get_suppliers(db: Session = Depends(get_db)):
     """
     Lấy toàn bộ nhà cung cấp
