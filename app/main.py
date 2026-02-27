@@ -3,21 +3,18 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 
 from app.database import get_db
-from app.routers import auth, purchase, sale
+from app.routers import auth, purchase, sale, stock, finance
 from app.auth_utils import get_password_hash
-from app.routers import stock
-from app.routers import finance
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
-origins = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-]
 
+# ==============================
+# CORS CONFIG (mở full để test)
+# ==============================
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=["*"],   # mở hết để tránh lỗi CORS
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -32,14 +29,12 @@ app.include_router(sale.router)
 app.include_router(stock.router)
 app.include_router(finance.router)
 
-
 # ==============================
 # ROOT
 # ==============================
 @app.get("/")
 def root():
     return {"message": "CTVT Core API running"}
-
 
 # ==============================
 # TEST DB
@@ -52,14 +47,9 @@ def test_db(db: Session = Depends(get_db)):
     except Exception as e:
         return {"db_status": "error", "detail": str(e)}
 
-
 # ==============================
 # TEST HASH
 # ==============================
 @app.get("/create-hash")
 def create_hash():
     return {"hash": get_password_hash("123abc")}
-
-
-
-
