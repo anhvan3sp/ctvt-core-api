@@ -9,11 +9,7 @@ router = APIRouter(
     prefix="/products",
     tags=["Products"]
 )
-@router.get("/", response_model=List[schemas.ProductResponse])
 
+@router.get("/", response_model=List[schemas.ProductResponse])
 def get_products(db: Session = Depends(get_db)):
-    """
-    Lấy toàn bộ sản phẩm
-    """
-    products = db.query(models.Product).all()
-    return products
+    return db.query(models.SanPham).all()
