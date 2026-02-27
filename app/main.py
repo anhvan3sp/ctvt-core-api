@@ -6,7 +6,7 @@ from app.database import get_db
 from app.routers import auth, purchase, sale, stock, finance
 from app.auth_utils import get_password_hash
 from fastapi.middleware.cors import CORSMiddleware
-
+from app.routers import supplier, warehouse, product
 app = FastAPI()
 
 # ==============================
@@ -20,6 +20,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+app.include_router(supplier.router)
+app.include_router(warehouse.router)
+app.include_router(product.router)
 # ==============================
 # REGISTER ROUTERS
 # ==============================
