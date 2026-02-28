@@ -139,7 +139,21 @@ def create_hoa_don_ban(db: Session, data: HoaDonBanCreate, user: NhanVien):
         if not kh:
             raise HTTPException(status_code=400, detail="Khách hàng không tồn tại")
 
+        # ===== TẠO SỐ HÓA ĐƠN TỰ ĐỘNG =====
+        last_hd = db.query(HoaDonBan).order_by(HoaDonBan.id.desc()).first()
+
+        if last_hd and last_hd.so_hd:
+            try:
+                so_moi = int(last_hd.so_hd.replace("HD", "")) + 1
+            except:
+                so_moi = last_hd.id + 1
+        else:
+            so_moi = 1
+
+        so_hd_moi = f"HD{so_moi:05d}"
+
         hoa_don = HoaDonBan(
+            so_hd=so_hd_moi,
             ngay=data.ngay,
             ma_kh=data.ma_kh,
             ma_nv=user.ma_nv,
@@ -210,20 +224,7 @@ def create_hoa_don_ban(db: Session, data: HoaDonBanCreate, user: NhanVien):
         tien_ck = Decimal(str(data.tien_ck))
         tong_da_tra = tien_mat + tien_ck
 
-        # Tổng công nợ cũ
-        tong_no_cu = db.query(
-            func.coalesce(func.sum(HoaDonBan.no_lai), 0)
-        ).filter(
-            HoaDonBan.ma_kh == data.ma_kh
-        ).scalar()
-
-        tong_no_cu = Decimal(str(tong_no_cu))
-
-        # Nợ phát sinh từ hóa đơn
         no_moi = tong_tien - tong_da_tra
-
-        # Công nợ sau hóa đơn (tham chiếu)
-        tong_no_sau = tong_no_cu + no_moi
 
         hoa_don.tong_tien = tong_tien
         hoa_don.tong_thanh_toan = tong_da_tra
@@ -238,7 +239,7 @@ def create_hoa_don_ban(db: Session, data: HoaDonBanCreate, user: NhanVien):
                 so_tien=tien_mat,
                 loai="thu",
                 hinh_thuc="tien_mat",
-                noi_dung=f"Thu tiền mặt HĐ {hoa_don.id}"
+                noi_dung=f"Thu tiền mặt HĐ {so_hd_moi}"
             ))
 
         if tien_ck > 0:
@@ -249,7 +250,7 @@ def create_hoa_don_ban(db: Session, data: HoaDonBanCreate, user: NhanVien):
                 so_tien=tien_ck,
                 loai="thu",
                 hinh_thuc="chuyen_khoan",
-                noi_dung=f"Thu chuyển khoản HĐ {hoa_don.id}"
+                noi_dung=f"Thu chuyển khoản HĐ {so_hd_moi}"
             ))
 
         db.commit()
