@@ -33,6 +33,11 @@ def get_customers(db: Session = Depends(get_db)):
 @router.get("/debt/{ma_kh}")
 def get_customer_debt(ma_kh: str, db: Session = Depends(get_db)):
 
+    # Kiểm tra khách tồn tại
+    kh = db.query(KhachHang).filter(KhachHang.ma_kh == ma_kh).first()
+    if not kh:
+        raise HTTPException(status_code=404, detail="Khách hàng không tồn tại")
+
     tong_no = db.query(
         func.coalesce(func.sum(HoaDonBan.no_lai), 0)
     ).filter(
@@ -41,5 +46,7 @@ def get_customer_debt(ma_kh: str, db: Session = Depends(get_db)):
 
     return {
         "ma_kh": ma_kh,
-        "tong_cong_no": tong_no
+        "ten_khach": kh.ten_cua_hang,
+        "tong_cong_no": float(tong_no)
     }
+
