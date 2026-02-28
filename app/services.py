@@ -133,7 +133,6 @@ def create_hoa_don_ban(db: Session, data: HoaDonBanCreate, user: NhanVien):
         # ===== XỬ LÝ TỒN =====
         for item in data.items:
 
-            # Validate sản phẩm
             sp = db.query(SanPham).filter(SanPham.ma_sp == item.ma_sp).first()
             if not sp:
                 raise HTTPException(status_code=400, detail=f"Sản phẩm {item.ma_sp} không tồn tại")
@@ -179,18 +178,16 @@ def create_hoa_don_ban(db: Session, data: HoaDonBanCreate, user: NhanVien):
                 id_tham_chieu=hoa_don.id
             ))
 
-        # ===== VALIDATE TIỀN =====
+        # ===== XỬ LÝ TIỀN & CÔNG NỢ =====
         tien_mat = Decimal(str(data.tien_mat))
         tien_ck = Decimal(str(data.tien_ck))
 
-        if tien_mat + tien_ck != tong_tien:
-            raise HTTPException(
-                status_code=400,
-                detail="Tổng tiền thanh toán không khớp tổng hóa đơn"
-            )
+        tong_da_tra = tien_mat + tien_ck
+        no_lai = tong_tien - tong_da_tra
 
         hoa_don.tong_tien = tong_tien
-        hoa_don.tong_thanh_toan = tong_tien
+        hoa_don.tong_thanh_toan = tong_da_tra
+        hoa_don.no_lai = no_lai
 
         # ===== GHI SỔ TIỀN =====
 
@@ -223,4 +220,3 @@ def create_hoa_don_ban(db: Session, data: HoaDonBanCreate, user: NhanVien):
     except Exception as e:
         db.rollback()
         raise e
-
