@@ -18,6 +18,34 @@ from app.models import (
 
 from app.schemas import HoaDonNhapCreate, HoaDonBanCreate
 
+def get_sale_detail(db: Session, hoa_don_id: int):
+
+    hd = db.query(HoaDonBan).filter(HoaDonBan.id == hoa_don_id).first()
+    if not hd:
+        raise HTTPException(status_code=404, detail="Không tìm thấy hóa đơn")
+
+    chi_tiet = db.query(HoaDonBanChiTiet).filter(
+        HoaDonBanChiTiet.id_hoa_don == hoa_don_id
+    ).all()
+
+    items = []
+
+    for ct in chi_tiet:
+        sp = db.query(SanPham).filter(SanPham.ma_sp == ct.ma_sp).first()
+
+        items.append({
+            "ma_sp": ct.ma_sp,
+            "ten_sp": sp.ten_sp if sp else "",
+            "so_luong": float(ct.so_luong),
+            "don_gia": float(ct.don_gia),
+            "thanh_tien": float(ct.thanh_tien)
+        })
+
+    return {
+        "so_hd": hd.so_hd if hd.so_hd else str(hd.id),
+        "ngay": hd.ngay,
+        "items": items
+    }
 
 def get_debt_detail(db: Session, ma_kh: str):
 
