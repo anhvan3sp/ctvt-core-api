@@ -179,15 +179,30 @@ def create_hoa_don_ban(db: Session, data: HoaDonBanCreate, user: NhanVien):
             ))
 
         # ===== XỬ LÝ TIỀN & CÔNG NỢ =====
+
         tien_mat = Decimal(str(data.tien_mat))
         tien_ck = Decimal(str(data.tien_ck))
-
         tong_da_tra = tien_mat + tien_ck
-        no_lai = tong_tien - tong_da_tra
+
+        # Tổng nợ cũ của khách
+        tong_no_cu = db.query(
+            func.coalesce(func.sum(HoaDonBan.no_lai), 0)
+        ).filter(
+            HoaDonBan.ma_kh == data.ma_kh
+        ).scalar()
+
+        tong_no_cu = Decimal(str(tong_no_cu))
+
+        # Nợ phát sinh từ hóa đơn mới
+        no_moi = tong_tien - tong_da_tra
+
+        # Nếu trả dư → tự động trừ vào nợ cũ
+        # (ERP chuẩn)
+        tong_no_sau = tong_no_cu + no_moi
 
         hoa_don.tong_tien = tong_tien
         hoa_don.tong_thanh_toan = tong_da_tra
-        hoa_don.no_lai = no_lai
+        hoa_don.no_lai = no_moi
 
         # ===== GHI SỔ TIỀN =====
 
@@ -215,6 +230,7 @@ def create_hoa_don_ban(db: Session, data: HoaDonBanCreate, user: NhanVien):
 
         db.commit()
         db.refresh(hoa_don)
+
         return hoa_don
 
     except Exception as e:
