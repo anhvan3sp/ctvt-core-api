@@ -7,11 +7,11 @@ from app.models import KhachHang
 from app.schemas import CustomerCreate, CustomerResponse
 from sqlalchemy import func
 from app.models import HoaDonBan
+from app.services.debt_service import get_debt_detail
+from app.schemas.debt import DebtDetailResponse
 
 
 
-from services.debt_service import get_debt_detail
-from schemas.debt import DebtDetailResponse
 
 router = APIRouter(prefix="/customer", tags=["Customer"])
 
