@@ -7,9 +7,9 @@ from app.models import KhachHang
 from app.schemas import CustomerCreate, CustomerResponse
 from sqlalchemy import func
 from app.models import HoaDonBan
-from app.services.debt_service import get_debt_detail
-from app.schemas.debt import DebtDetailResponse
 
+from app.schemas import DebtDetailResponse
+from app.services import get_debt_detail
 
 
 
