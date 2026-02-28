@@ -25,19 +25,22 @@ def get_debt_detail(db: Session, ma_kh: str):
         db.query(HoaDonBan)
         .filter(HoaDonBan.ma_kh == ma_kh)
         .filter(HoaDonBan.no_lai > 0)
-        .order_by(HoaDonBan.ngay.asc())   # hóa đơn cũ trước
+        .order_by(HoaDonBan.ngay.asc())
         .all()
     )
 
     result = []
 
     for hd in hoa_dons:
+
+        so_hd = hd.so_hd if hd.so_hd else str(hd.id)
+
         result.append({
-            "ma_hoa_don": hd.ma_hoa_don,
+            "ma_hoa_don": so_hd,
             "ngay": hd.ngay,
-            "tong_tien": hd.tong_tien,
-            "da_tra": hd.tong_tien - hd.no_lai,
-            "con_no": hd.no_lai
+            "tong_tien": float(hd.tong_tien or 0),
+            "da_tra": float((hd.tong_tien or 0) - (hd.no_lai or 0)),
+            "con_no": float(hd.no_lai or 0)
         })
 
     return result
