@@ -174,8 +174,11 @@ class NopQuyRequest(BaseModel):
 class CustomerBase(BaseModel):
     ma_kh: str
     ten_cua_hang: str
+    ten_cua_hang_chi_tiet: Optional[str] = None
     so_dien_thoai: Optional[str] = None
     dia_chi: Optional[str] = None
+    ma_so_thue: Optional[str] = None
+    ghi_chu: Optional[str] = None
 
 
 class CustomerCreate(CustomerBase):
