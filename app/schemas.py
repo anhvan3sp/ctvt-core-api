@@ -173,7 +173,7 @@ class NopQuyRequest(BaseModel):
 
 class CustomerBase(BaseModel):
     ma_kh: str
-    ten_kh: str
+    ten_cua_hang: str
     so_dien_thoai: Optional[str] = None
     dia_chi: Optional[str] = None
 
