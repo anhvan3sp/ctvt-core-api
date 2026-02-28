@@ -170,3 +170,20 @@ class ThuChiResponse(ThuChiCreate):
 class NopQuyRequest(BaseModel):
     so_tien: Decimal
     hinh_thuc: HinhThuc
+
+class CustomerBase(BaseModel):
+    ma_kh: str
+    ten_kh: str
+    so_dien_thoai: Optional[str] = None
+    dia_chi: Optional[str] = None
+
+
+class CustomerCreate(CustomerBase):
+    pass
+
+
+class CustomerResponse(CustomerBase):
+    id: int
+
+    class Config:
+        orm_mode = True
