@@ -4,7 +4,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from decimal import Decimal
 from datetime import datetime
-
+from fastapi import HTTPException
+from app.models import KhachHang, SanPham
 from app.models import (
     HoaDonNhap,
     HoaDonNhapChiTiet,
@@ -103,10 +104,18 @@ def create_hoa_don_nhap(db: Session, data: HoaDonNhapCreate, user: NhanVien):
 # =====================================================
 # BÁN HÀNG (LOGIC TIỀN CHUẨN)
 # =====================================================
+
+
+
 def create_hoa_don_ban(db: Session, data: HoaDonBanCreate, user: NhanVien):
 
     try:
         tong_tien = Decimal("0")
+
+        # ===== VALIDATE KHÁCH =====
+        kh = db.query(KhachHang).filter(KhachHang.ma_kh == data.ma_kh).first()
+        if not kh:
+            raise HTTPException(status_code=400, detail="Khách hàng không tồn tại")
 
         hoa_don = HoaDonBan(
             ngay=data.ngay,
@@ -124,6 +133,11 @@ def create_hoa_don_ban(db: Session, data: HoaDonBanCreate, user: NhanVien):
         # ===== XỬ LÝ TỒN =====
         for item in data.items:
 
+            # Validate sản phẩm
+            sp = db.query(SanPham).filter(SanPham.ma_sp == item.ma_sp).first()
+            if not sp:
+                raise HTTPException(status_code=400, detail=f"Sản phẩm {item.ma_sp} không tồn tại")
+
             tong_nhap = db.query(func.coalesce(func.sum(NhatKyKho.so_luong), 0)).filter(
                 NhatKyKho.ma_sp == item.ma_sp,
                 NhatKyKho.ma_kho == data.ma_kho,
@@ -139,7 +153,10 @@ def create_hoa_don_ban(db: Session, data: HoaDonBanCreate, user: NhanVien):
             so_ton = Decimal(str(tong_nhap)) - Decimal(str(tong_xuat))
 
             if so_ton < Decimal(str(item.so_luong)):
-                raise Exception(f"Tồn kho không đủ cho {item.ma_sp}")
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Tồn kho không đủ cho {item.ma_sp}"
+                )
 
             thanh_tien = Decimal(str(item.so_luong)) * Decimal(str(item.don_gia))
             tong_tien += thanh_tien
@@ -162,43 +179,33 @@ def create_hoa_don_ban(db: Session, data: HoaDonBanCreate, user: NhanVien):
                 id_tham_chieu=hoa_don.id
             ))
 
-        hoa_don.tong_tien = tong_tien
-        hoa_don.tong_thanh_toan = tong_tien
-
-        # ===== XỬ LÝ TIỀN =====
+        # ===== VALIDATE TIỀN =====
         tien_mat = Decimal(str(data.tien_mat))
         tien_ck = Decimal(str(data.tien_ck))
 
-        # Tiền mặt
+        if tien_mat + tien_ck != tong_tien:
+            raise HTTPException(
+                status_code=400,
+                detail="Tổng tiền thanh toán không khớp tổng hóa đơn"
+            )
+
+        hoa_don.tong_tien = tong_tien
+        hoa_don.tong_thanh_toan = tong_tien
+
+        # ===== GHI SỔ TIỀN =====
+
         if tien_mat > 0:
+            db.add(ThuChi(
+                ngay=datetime.utcnow(),
+                doi_tuong="nhan_vien" if user.vai_tro == "nv_dac_biet" else "cong_ty",
+                ma_nv=user.ma_nv,
+                so_tien=tien_mat,
+                loai="thu",
+                hinh_thuc="tien_mat",
+                noi_dung=f"Thu tiền mặt HĐ {hoa_don.id}"
+            ))
 
-            if user.vai_tro == "nv_dac_biet":
-
-                db.add(ThuChi(
-                    ngay=datetime.utcnow(),
-                    doi_tuong="nhan_vien",
-                    ma_nv=user.ma_nv,
-                    so_tien=tien_mat,
-                    loai="thu",
-                    hinh_thuc="tien_mat",
-                    noi_dung=f"Thu tiền mặt HĐ {hoa_don.id}"
-                ))
-
-            else:
-
-                db.add(ThuChi(
-                    ngay=datetime.utcnow(),
-                    doi_tuong="cong_ty",
-                    ma_nv=user.ma_nv,
-                    so_tien=tien_mat,
-                    loai="thu",
-                    hinh_thuc="tien_mat",
-                    noi_dung=f"Thu tiền mặt HĐ {hoa_don.id}"
-                ))
-
-        # Chuyển khoản luôn vào ngân hàng công ty
         if tien_ck > 0:
-
             db.add(ThuChi(
                 ngay=datetime.utcnow(),
                 doi_tuong="cong_ty",
@@ -216,3 +223,4 @@ def create_hoa_don_ban(db: Session, data: HoaDonBanCreate, user: NhanVien):
     except Exception as e:
         db.rollback()
         raise e
+
