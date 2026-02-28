@@ -171,14 +171,6 @@ class NhatKyKho(Base):
 # THU CHI
 # ==============================
 
-class KhachHang(Base):
-    __tablename__ = "khach_hang"
-
-    id = Column(Integer, primary_key=True, index=True)
-    ma_kh = Column(String, unique=True, index=True, nullable=False)
-    ten_kh = Column(String, nullable=False)
-    so_dien_thoai = Column(String, nullable=True)
-    dia_chi = Column(String, nullable=True)
 
 class ThuChi(Base):
     __tablename__ = "thu_chi"
