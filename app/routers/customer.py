@@ -7,6 +7,12 @@ from app.models import KhachHang
 from app.schemas import CustomerCreate, CustomerResponse
 from sqlalchemy import func
 from app.models import HoaDonBan
+
+
+
+from services.debt_service import get_debt_detail
+from schemas.debt import DebtDetailResponse
+
 router = APIRouter(prefix="/customer", tags=["Customer"])
 
 
@@ -85,3 +91,12 @@ def get_customer_debt(ma_kh: str, db: Session = Depends(get_db)):
         "so_hoa_don_con_no": len(ds_hoa_don),
         "danh_sach_hoa_don_con_no": ds_hoa_don
     }
+
+
+
+
+
+@router.get("/debt-detail/{ma_kh}", response_model=List[DebtDetailResponse])
+def debt_detail(ma_kh: str, db: Session = Depends(get_db)):
+    return get_debt_detail(db, ma_kh)
+
