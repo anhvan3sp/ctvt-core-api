@@ -19,6 +19,29 @@ from app.models import (
 from app.schemas import HoaDonNhapCreate, HoaDonBanCreate
 
 
+def get_debt_detail(db: Session, ma_kh: str):
+
+    hoa_dons = (
+        db.query(HoaDonBan)
+        .filter(HoaDonBan.ma_kh == ma_kh)
+        .filter(HoaDonBan.no_lai > 0)
+        .order_by(HoaDonBan.ngay.asc())   # hóa đơn cũ trước
+        .all()
+    )
+
+    result = []
+
+    for hd in hoa_dons:
+        result.append({
+            "ma_hoa_don": hd.ma_hoa_don,
+            "ngay": hd.ngay,
+            "tong_tien": hd.tong_tien,
+            "da_tra": hd.tong_tien - hd.no_lai,
+            "con_no": hd.no_lai
+        })
+
+    return result
+
 # =====================================================
 # NHẬP HÀNG
 # =====================================================
