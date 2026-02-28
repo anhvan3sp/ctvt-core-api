@@ -1,11 +1,9 @@
-# app/services.py
-
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from decimal import Decimal
 from datetime import datetime
 from fastapi import HTTPException
-from app.models import KhachHang, SanPham
+
 from app.models import (
     HoaDonNhap,
     HoaDonNhapChiTiet,
@@ -13,7 +11,9 @@ from app.models import (
     HoaDonBanChiTiet,
     NhatKyKho,
     ThuChi,
-    NhanVien
+    NhanVien,
+    KhachHang,
+    SanPham
 )
 
 from app.schemas import HoaDonNhapCreate, HoaDonBanCreate
@@ -66,7 +66,6 @@ def create_hoa_don_nhap(db: Session, data: HoaDonNhapCreate, user: NhanVien):
         hoa_don.tong_tien = tong_tien
         hoa_don.tong_thanh_toan = tong_tien
 
-        # ===== XỬ LÝ TIỀN CHI =====
         tien_mat = Decimal(str(data.tien_mat))
         tien_ck = Decimal(str(data.tien_ck))
 
@@ -102,17 +101,14 @@ def create_hoa_don_nhap(db: Session, data: HoaDonNhapCreate, user: NhanVien):
 
 
 # =====================================================
-# BÁN HÀNG (LOGIC TIỀN CHUẨN)
+# BÁN HÀNG (LOGIC CÔNG NỢ CHUẨN ERP)
 # =====================================================
-
-
-
 def create_hoa_don_ban(db: Session, data: HoaDonBanCreate, user: NhanVien):
 
     try:
         tong_tien = Decimal("0")
 
-        # ===== VALIDATE KHÁCH =====
+        # ===== KIỂM TRA KHÁCH =====
         kh = db.query(KhachHang).filter(KhachHang.ma_kh == data.ma_kh).first()
         if not kh:
             raise HTTPException(status_code=400, detail="Khách hàng không tồn tại")
@@ -130,20 +126,24 @@ def create_hoa_don_ban(db: Session, data: HoaDonBanCreate, user: NhanVien):
         db.add(hoa_don)
         db.flush()
 
-        # ===== XỬ LÝ TỒN =====
+        # ===== XỬ LÝ SẢN PHẨM & TỒN =====
         for item in data.items:
 
             sp = db.query(SanPham).filter(SanPham.ma_sp == item.ma_sp).first()
             if not sp:
                 raise HTTPException(status_code=400, detail=f"Sản phẩm {item.ma_sp} không tồn tại")
 
-            tong_nhap = db.query(func.coalesce(func.sum(NhatKyKho.so_luong), 0)).filter(
+            tong_nhap = db.query(
+                func.coalesce(func.sum(NhatKyKho.so_luong), 0)
+            ).filter(
                 NhatKyKho.ma_sp == item.ma_sp,
                 NhatKyKho.ma_kho == data.ma_kho,
                 NhatKyKho.loai == "nhap"
             ).scalar()
 
-            tong_xuat = db.query(func.coalesce(func.sum(NhatKyKho.so_luong), 0)).filter(
+            tong_xuat = db.query(
+                func.coalesce(func.sum(NhatKyKho.so_luong), 0)
+            ).filter(
                 NhatKyKho.ma_sp == item.ma_sp,
                 NhatKyKho.ma_kho == data.ma_kho,
                 NhatKyKho.loai == "xuat"
@@ -184,7 +184,7 @@ def create_hoa_don_ban(db: Session, data: HoaDonBanCreate, user: NhanVien):
         tien_ck = Decimal(str(data.tien_ck))
         tong_da_tra = tien_mat + tien_ck
 
-        # Tổng nợ cũ của khách
+        # Tổng công nợ cũ
         tong_no_cu = db.query(
             func.coalesce(func.sum(HoaDonBan.no_lai), 0)
         ).filter(
@@ -193,19 +193,17 @@ def create_hoa_don_ban(db: Session, data: HoaDonBanCreate, user: NhanVien):
 
         tong_no_cu = Decimal(str(tong_no_cu))
 
-        # Nợ phát sinh từ hóa đơn mới
+        # Nợ phát sinh từ hóa đơn
         no_moi = tong_tien - tong_da_tra
 
-        # Nếu trả dư → tự động trừ vào nợ cũ
-        # (ERP chuẩn)
+        # Công nợ sau hóa đơn (tham chiếu)
         tong_no_sau = tong_no_cu + no_moi
 
         hoa_don.tong_tien = tong_tien
         hoa_don.tong_thanh_toan = tong_da_tra
         hoa_don.no_lai = no_moi
 
-        # ===== GHI SỔ TIỀN =====
-
+        # ===== GHI THU TIỀN =====
         if tien_mat > 0:
             db.add(ThuChi(
                 ngay=datetime.utcnow(),
