@@ -4,7 +4,18 @@ from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
 
+from pydantic import BaseModel
+from datetime import date
 
+class DebtDetailResponse(BaseModel):
+    ma_hoa_don: str
+    ngay: date
+    tong_tien: float
+    da_tra: float
+    con_no: float
+
+    class Config:
+        from_attributes = True
 # =====================================================
 # ENUMS (KHÓA GIÁ TRỊ)
 # =====================================================
