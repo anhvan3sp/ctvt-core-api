@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from datetime import date
 
 from database import get_db
-from models import Sale, Purchase, ThuChi, Customer
+from models import Sale, Purchase, ThuChi, Customer, SaleItem
 
 router = APIRouter(prefix="/report", tags=["report"])
 
@@ -25,12 +25,21 @@ def report_day(ngay: date, db: Session = Depends(get_db)):
     tong_ban = 0
     tong_tien_mat = 0
     tong_tien_ck = 0
+    tong_so_binh_ban = 0
 
     for s, ten_kh in sales:
+
+        # tính số bình trong hóa đơn
+        items = db.query(SaleItem).filter(SaleItem.sale_id == s.id).all()
+
+        so_binh = sum(i.so_luong for i in items)
+
+        tong_so_binh_ban += so_binh
 
         hoa_don_ban.append({
             "so_hd": s.so_hd,
             "ten_kh": ten_kh,
+            "so_binh": so_binh,
             "tong_tien": s.tong_tien,
             "tien_mat": s.tien_mat,
             "tien_ck": s.tien_ck,
@@ -94,6 +103,8 @@ def report_day(ngay: date, db: Session = Depends(get_db)):
         "thu_chi_trong_ngay": thu_chi_trong_ngay,
 
         "tong_ket": {
+
+            "tong_so_binh_ban": tong_so_binh_ban,
 
             "tong_ban": tong_ban,
 
