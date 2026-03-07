@@ -1,9 +1,16 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from datetime import date
+from sqlalchemy import func
 
 from app.database import get_db
-from app.models import HoaDonBan, HoaDonNhap, ThuChi, Customer, SaleItem
+from app.models import (
+    HoaDonBan,
+    HoaDonBanChiTiet,
+    HoaDonNhap,
+    ThuChi,
+    KhachHang
+)
 
 router = APIRouter(prefix="/report", tags=["report"])
 
@@ -11,13 +18,13 @@ router = APIRouter(prefix="/report", tags=["report"])
 @router.get("/day")
 def report_day(ngay: date, db: Session = Depends(get_db)):
 
-    # ========================
+    # =========================
     # BÁN HÀNG
-    # ========================
+    # =========================
 
     sales = (
-        db.query(HoaDonBan, Customer.ten_cua_hang)
-        .join(Customer, HoaDonBan.ma_kh == Customer.ma_kh)
+        db.query(HoaDonBan, KhachHang.ten_cua_hang)
+        .join(KhachHang, HoaDonBan.ma_kh == KhachHang.ma_kh)
         .filter(HoaDonBan.ngay == ngay)
         .all()
     )
@@ -31,31 +38,34 @@ def report_day(ngay: date, db: Session = Depends(get_db)):
 
     for s, ten_kh in sales:
 
-        items = db.query(SaleItem).filter(SaleItem.sale_id == s.id).all()
-
-        so_binh = sum(i.so_luong for i in items)
+        # tổng số bình trong hóa đơn
+        so_binh = (
+            db.query(func.sum(HoaDonBanChiTiet.so_luong))
+            .filter(HoaDonBanChiTiet.id_hoa_don == s.id)
+            .scalar() or 0
+        )
 
         tong_so_binh_ban += so_binh
 
         hoa_don_ban.append({
             "so_hd": s.so_hd,
             "ten_kh": ten_kh,
-            "so_binh": so_binh,
-            "tong_tien": s.tong_tien,
-            "tien_mat": s.tien_mat,
-            "tien_ck": s.tien_ck,
-            "tong_thanh_toan": s.tong_thanh_toan,
+            "so_binh": float(so_binh),
+            "tong_tien": float(s.tong_tien or 0),
+            "tien_mat": float(s.tien_mat or 0),
+            "tien_ck": float(s.tien_ck or 0),
+            "tong_thanh_toan": float(s.tong_thanh_toan or 0),
             "ngay": s.ngay
         })
 
-        tong_ban += s.tong_thanh_toan
-        tong_tien_mat += s.tien_mat
-        tong_tien_ck += s.tien_ck
+        tong_ban += float(s.tong_thanh_toan or 0)
+        tong_tien_mat += float(s.tien_mat or 0)
+        tong_tien_ck += float(s.tien_ck or 0)
 
 
-    # ========================
+    # =========================
     # NHẬP HÀNG
-    # ========================
+    # =========================
 
     purchases = db.query(HoaDonNhap).filter(HoaDonNhap.ngay == ngay).all()
 
@@ -65,19 +75,23 @@ def report_day(ngay: date, db: Session = Depends(get_db)):
     for p in purchases:
 
         hoa_don_nhap.append({
-            "so_hd": p.so_hd,
-            "tong_tien": p.tong_tien,
+            "so_hd": p.id,
+            "tong_tien": float(p.tong_tien or 0),
             "ngay": p.ngay
         })
 
-        tong_nhap += p.tong_tien
+        tong_nhap += float(p.tong_tien or 0)
 
 
-    # ========================
+    # =========================
     # THU CHI
-    # ========================
+    # =========================
 
-    thu_chi = db.query(ThuChi).filter(ThuChi.ngay == ngay).all()
+    thu_chi = (
+        db.query(ThuChi)
+        .filter(func.date(ThuChi.ngay) == ngay)
+        .all()
+    )
 
     thu_chi_trong_ngay = []
 
@@ -86,22 +100,24 @@ def report_day(ngay: date, db: Session = Depends(get_db)):
 
     for t in thu_chi:
 
+        so_tien = float(t.so_tien or 0)
+
         thu_chi_trong_ngay.append({
             "doi_tuong": t.doi_tuong,
-            "so_tien": t.so_tien,
+            "so_tien": so_tien,
             "hinh_thuc": t.hinh_thuc,
             "ngay": t.ngay
         })
 
-        if t.so_tien > 0:
-            tong_thu += t.so_tien
+        if t.loai == "thu":
+            tong_thu += so_tien
         else:
-            tong_chi += abs(t.so_tien)
+            tong_chi += so_tien
 
 
-    # ========================
+    # =========================
     # TỔNG KẾT
-    # ========================
+    # =========================
 
     ton_quy_cuoi_ngay = (
         tong_tien_mat
@@ -121,7 +137,7 @@ def report_day(ngay: date, db: Session = Depends(get_db)):
 
         "tong_ket": {
 
-            "tong_so_binh_ban": tong_so_binh_ban,
+            "tong_so_binh_ban": float(tong_so_binh_ban),
 
             "tong_ban": tong_ban,
 
