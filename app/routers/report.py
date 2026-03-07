@@ -11,7 +11,14 @@ router = APIRouter(prefix="/report", tags=["report"])
 @router.get("/day")
 def report_day(ngay: date, db: Session = Depends(get_db)):
 
-    sales = db.query(Sale).filter(Sale.ngay == ngay).all()
+    # ===== BÁN HÀNG =====
+
+    sales = (
+        db.query(Sale, Customer.ten_cua_hang)
+        .join(Customer, Sale.ma_kh == Customer.ma_kh)
+        .filter(Sale.ngay == ngay)
+        .all()
+    )
 
     hoa_don_ban = []
 
@@ -19,23 +26,24 @@ def report_day(ngay: date, db: Session = Depends(get_db)):
     tong_tien_mat = 0
     tong_tien_ck = 0
 
-    for s in sales:
-
-        kh = db.query(Customer).filter(Customer.ma_kh == s.ma_kh).first()
+    for s, ten_kh in sales:
 
         hoa_don_ban.append({
             "so_hd": s.so_hd,
-            "ten_kh": kh.ten_cua_hang if kh else s.ma_kh,
+            "ten_kh": ten_kh,
             "tong_tien": s.tong_tien,
             "tien_mat": s.tien_mat,
             "tien_ck": s.tien_ck,
+            "tong_thanh_toan": s.tong_thanh_toan,
             "ngay": s.ngay
         })
 
-        tong_ban += s.tong_tien
+        tong_ban += s.tong_thanh_toan
         tong_tien_mat += s.tien_mat
         tong_tien_ck += s.tien_ck
 
+
+    # ===== NHẬP HÀNG =====
 
     purchases = db.query(Purchase).filter(Purchase.ngay == ngay).all()
 
@@ -52,6 +60,8 @@ def report_day(ngay: date, db: Session = Depends(get_db)):
 
         tong_nhap += p.tong_tien
 
+
+    # ===== THU CHI =====
 
     thu_chi = db.query(ThuChi).filter(ThuChi.ngay == ngay).all()
 
