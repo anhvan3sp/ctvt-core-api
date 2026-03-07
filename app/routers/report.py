@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from datetime import date
 
 from app.database import get_db
-from app.models import Sale, Purchase, ThuChi, Customer, SaleItem
+from app.models import HoaDonBan, HoaDonNhap, ThuChi, Customer, SaleItem
 
 router = APIRouter(prefix="/report", tags=["report"])
 
@@ -11,14 +11,14 @@ router = APIRouter(prefix="/report", tags=["report"])
 @router.get("/day")
 def report_day(ngay: date, db: Session = Depends(get_db)):
 
-    # =========================
+    # ========================
     # BÁN HÀNG
-    # =========================
+    # ========================
 
     sales = (
-        db.query(Sale, Customer.ten_cua_hang)
-        .join(Customer, Sale.ma_kh == Customer.ma_kh)
-        .filter(Sale.ngay == ngay)
+        db.query(HoaDonBan, Customer.ten_cua_hang)
+        .join(Customer, HoaDonBan.ma_kh == Customer.ma_kh)
+        .filter(HoaDonBan.ngay == ngay)
         .all()
     )
 
@@ -31,7 +31,6 @@ def report_day(ngay: date, db: Session = Depends(get_db)):
 
     for s, ten_kh in sales:
 
-        # lấy các sản phẩm trong hóa đơn
         items = db.query(SaleItem).filter(SaleItem.sale_id == s.id).all()
 
         so_binh = sum(i.so_luong for i in items)
@@ -54,11 +53,11 @@ def report_day(ngay: date, db: Session = Depends(get_db)):
         tong_tien_ck += s.tien_ck
 
 
-    # =========================
+    # ========================
     # NHẬP HÀNG
-    # =========================
+    # ========================
 
-    purchases = db.query(Purchase).filter(Purchase.ngay == ngay).all()
+    purchases = db.query(HoaDonNhap).filter(HoaDonNhap.ngay == ngay).all()
 
     hoa_don_nhap = []
     tong_nhap = 0
@@ -74,9 +73,9 @@ def report_day(ngay: date, db: Session = Depends(get_db)):
         tong_nhap += p.tong_tien
 
 
-    # =========================
+    # ========================
     # THU CHI
-    # =========================
+    # ========================
 
     thu_chi = db.query(ThuChi).filter(ThuChi.ngay == ngay).all()
 
@@ -100,9 +99,9 @@ def report_day(ngay: date, db: Session = Depends(get_db)):
             tong_chi += abs(t.so_tien)
 
 
-    # =========================
+    # ========================
     # TỔNG KẾT
-    # =========================
+    # ========================
 
     ton_quy_cuoi_ngay = (
         tong_tien_mat
