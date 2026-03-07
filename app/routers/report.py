@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from datetime import date
 
 from database import get_db
-from models import Sale, Purchase, ThuChi
+from models import Sale, Purchase, ThuChi, Customer
 
 router = APIRouter(prefix="/report", tags=["report"])
 
@@ -15,15 +15,20 @@ def report_day(ngay: date, db: Session = Depends(get_db)):
     sales = db.query(Sale).filter(Sale.ngay == ngay).all()
 
     hoa_don_ban = []
+
     tong_ban = 0
     tong_tien_mat = 0
     tong_tien_ck = 0
 
     for s in sales:
 
+        kh = db.query(Customer).filter(Customer.ma_kh == s.ma_kh).first()
+
+        ten_kh = kh.ten_cua_hang if kh else s.ma_kh
+
         hoa_don_ban.append({
             "so_hd": s.so_hd,
-            "ma_kh": s.ma_kh,
+            "ten_kh": ten_kh,
             "tong_tien": s.tong_tien,
             "tien_mat": s.tien_mat,
             "tien_ck": s.tien_ck,
@@ -57,6 +62,7 @@ def report_day(ngay: date, db: Session = Depends(get_db)):
     thu_chi = db.query(ThuChi).filter(ThuChi.ngay == ngay).all()
 
     thu_chi_trong_ngay = []
+
     tong_thu = 0
     tong_chi = 0
 
@@ -98,7 +104,6 @@ def report_day(ngay: date, db: Session = Depends(get_db)):
             "tong_chi": tong_chi,
 
             "ton_quy_cuoi_ngay":
-
                 tong_tien_mat
                 + tong_thu
                 - tong_chi
