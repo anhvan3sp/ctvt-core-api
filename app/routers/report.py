@@ -2,8 +2,8 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from datetime import date
 
-from database import get_db
-from models import Sale, Purchase, ThuChi, Customer, SaleItem
+from app.database import get_db
+from app.models import Sale, Purchase, ThuChi, Customer, SaleItem
 
 router = APIRouter(prefix="/report", tags=["report"])
 
@@ -11,7 +11,9 @@ router = APIRouter(prefix="/report", tags=["report"])
 @router.get("/day")
 def report_day(ngay: date, db: Session = Depends(get_db)):
 
-    # ===== BÁN HÀNG =====
+    # =========================
+    # BÁN HÀNG
+    # =========================
 
     sales = (
         db.query(Sale, Customer.ten_cua_hang)
@@ -29,7 +31,7 @@ def report_day(ngay: date, db: Session = Depends(get_db)):
 
     for s, ten_kh in sales:
 
-        # tính số bình trong hóa đơn
+        # lấy các sản phẩm trong hóa đơn
         items = db.query(SaleItem).filter(SaleItem.sale_id == s.id).all()
 
         so_binh = sum(i.so_luong for i in items)
@@ -52,7 +54,9 @@ def report_day(ngay: date, db: Session = Depends(get_db)):
         tong_tien_ck += s.tien_ck
 
 
-    # ===== NHẬP HÀNG =====
+    # =========================
+    # NHẬP HÀNG
+    # =========================
 
     purchases = db.query(Purchase).filter(Purchase.ngay == ngay).all()
 
@@ -70,7 +74,9 @@ def report_day(ngay: date, db: Session = Depends(get_db)):
         tong_nhap += p.tong_tien
 
 
-    # ===== THU CHI =====
+    # =========================
+    # THU CHI
+    # =========================
 
     thu_chi = db.query(ThuChi).filter(ThuChi.ngay == ngay).all()
 
@@ -93,6 +99,18 @@ def report_day(ngay: date, db: Session = Depends(get_db)):
         else:
             tong_chi += abs(t.so_tien)
 
+
+    # =========================
+    # TỔNG KẾT
+    # =========================
+
+    ton_quy_cuoi_ngay = (
+        tong_tien_mat
+        + tong_tien_ck
+        + tong_thu
+        - tong_chi
+        - tong_nhap
+    )
 
     return {
 
@@ -118,11 +136,7 @@ def report_day(ngay: date, db: Session = Depends(get_db)):
 
             "tong_chi": tong_chi,
 
-            "ton_quy_cuoi_ngay":
-                tong_tien_mat
-                + tong_thu
-                - tong_chi
-                - tong_nhap
+            "ton_quy_cuoi_ngay": ton_quy_cuoi_ngay
         }
 
     }
