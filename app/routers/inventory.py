@@ -12,18 +12,13 @@ router = APIRouter(prefix="/inventory", tags=["inventory"])
 @router.get("")
 def inventory(
     db: Session = Depends(get_db),
-    user = Depends(require_roles("admin","ke_toan","ke_toan_online"))
+    user = Depends(require_roles(["admin","ke_toan","ke_toan_online"]))
 ):
 
     data = (
         db.query(
             SanPham.ten_sp,
-            func.sum(
-                func.case(
-                    (NhatKyKho.loai=="nhap",NhatKyKho.so_luong),
-                    else_=-NhatKyKho.so_luong
-                )
-            ).label("ton")
+            func.sum(NhatKyKho.so_luong).label("ton")
         )
         .join(SanPham, SanPham.ma_sp == NhatKyKho.ma_sp)
         .group_by(SanPham.ten_sp)
@@ -33,10 +28,9 @@ def inventory(
     result = []
 
     for ten_sp, ton in data:
-
         result.append({
-            "ten_sp":ten_sp,
-            "ton":float(ton or 0)
+            "ten_sp": ten_sp,
+            "ton": float(ton or 0)
         })
 
     return result
