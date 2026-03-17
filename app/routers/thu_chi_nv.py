@@ -5,13 +5,10 @@ from datetime import datetime
 from app.database import get_db
 from app.models import ThuChi
 from app.auth_utils import get_current_user
+from app.schemas import LoaiThuChi, HinhThuc
 
 router = APIRouter(prefix="/thu-chi-nv", tags=["thu_chi_nhan_vien"])
 
-
-# ============================
-# Danh mục giao dịch hợp lệ
-# ============================
 
 THU_TYPES = [
     "khach_tra_no",
@@ -29,24 +26,15 @@ CHI_TYPES = [
 ]
 
 
-# ============================
-# Tạo thu chi
-# ============================
-
 @router.post("/create")
 def create_thu_chi_nv(
-    loai: str,
+    loai: LoaiThuChi,
     loai_giao_dich: str,
     so_tien: float,
-    hinh_thuc: str,
-    noi_dung: str = "",
+    hinh_thuc: HinhThuc,
     db: Session = Depends(get_db),
     user = Depends(get_current_user)
 ):
-
-    # kiểm tra loại
-    if loai not in ["thu", "chi"]:
-        raise HTTPException(400, "loai phải là thu hoặc chi")
 
     # kiểm tra loại giao dịch
     if loai == "thu" and loai_giao_dich not in THU_TYPES:
@@ -56,10 +44,7 @@ def create_thu_chi_nv(
         raise HTTPException(400, "loai_giao_dich không hợp lệ")
 
     # xác định quỹ
-    if hinh_thuc == "tien_mat":
-        doi_tuong = "nhan_vien"
-    else:
-        doi_tuong = "cong_ty"
+    doi_tuong = "nhan_vien" if hinh_thuc == "tien_mat" else "cong_ty"
 
     # lấy số dư gần nhất
     last = (
@@ -86,7 +71,6 @@ def create_thu_chi_nv(
         so_tien=so_tien,
         loai=loai,
         hinh_thuc=hinh_thuc,
-        noi_dung=noi_dung,
         loai_giao_dich=loai_giao_dich,
         ngay_tao=datetime.now(),
         so_du_sau=so_du_moi
@@ -100,10 +84,6 @@ def create_thu_chi_nv(
         "so_du_sau": so_du_moi
     }
 
-
-# ============================
-# Số dư quỹ nhân viên
-# ============================
 
 @router.get("/so-du")
 def get_balance(
@@ -125,10 +105,6 @@ def get_balance(
         "so_du": so_du
     }
 
-
-# ============================
-# Lịch sử thu chi
-# ============================
 
 @router.get("/list")
 def list_thu_chi(
