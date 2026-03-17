@@ -7,6 +7,12 @@ from enum import Enum
 from pydantic import BaseModel
 from datetime import date
 
+class HoaDonNhapCreate(BaseModel):
+    ngay: date
+    ma_ncc: str
+    ma_kho: str
+    tong_tien: float
+    force_create: bool = False
 class DebtDetailResponse(BaseModel):
     ma_hoa_don: str
     ngay: date
