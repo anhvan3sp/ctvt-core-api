@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy import func, text
 from typing import List
-from sqlalchemy import func
 
 from app.database import get_db
 from app.schemas import HoaDonNhapCreate, HoaDonNhapResponse
@@ -29,12 +29,12 @@ def create_purchase(
     # ---- kiểm tra quyền kho ----
     if user.vai_tro != "admin":
 
-        sql = """
+        sql = text("""
         SELECT 1
         FROM nhan_vien_kho
         WHERE ma_nv = :ma_nv
         AND ma_kho = :ma_kho
-        """
+        """)
 
         row = db.execute(
             sql,
@@ -59,13 +59,14 @@ def create_purchase(
         func.date(HoaDonNhap.ngay) == func.current_date()
     ).first()
 
-    # nếu trùng và chưa xác nhận force_create
-    if duplicate and not getattr(data, "force_create", False):
+    # ---- nếu trùng và chưa xác nhận force_create ----
+    if duplicate and not data.force_create:
         return {
             "warning": True,
-            "message": "Hóa đơn này có vẻ đã nhập trong ngày. Bạn có muốn nhập tiếp không?"
+            "message": "Hoa don nay co ve da nhap trong ngay. Ban co muon nhap tiep khong?"
         }
 
+    # ---- tạo hóa đơn ----
     return create_hoa_don_nhap(db, data, user)
 
 
