@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
+from sqlalchemy import func
 
 from app.database import get_db
 from app.schemas import HoaDonNhapCreate, HoaDonNhapResponse
@@ -48,6 +49,22 @@ def create_purchase(
                 status_code=403,
                 detail="Nhan vien khong duoc phep su dung kho nay"
             )
+
+    # ---- kiểm tra hóa đơn trùng trong ngày ----
+    duplicate = db.query(HoaDonNhap).filter(
+        HoaDonNhap.ma_nv == user.ma_nv,
+        HoaDonNhap.ma_ncc == data.ma_ncc,
+        HoaDonNhap.ma_kho == data.ma_kho,
+        HoaDonNhap.tong_tien == data.tong_tien,
+        func.date(HoaDonNhap.ngay) == func.current_date()
+    ).first()
+
+    # nếu trùng và chưa xác nhận force_create
+    if duplicate and not getattr(data, "force_create", False):
+        return {
+            "warning": True,
+            "message": "Hóa đơn này có vẻ đã nhập trong ngày. Bạn có muốn nhập tiếp không?"
+        }
 
     return create_hoa_don_nhap(db, data, user)
 
