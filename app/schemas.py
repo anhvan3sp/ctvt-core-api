@@ -165,7 +165,7 @@ class ThuChiCreate(BaseModel):
     so_tien: Decimal
     loai: LoaiThuChi
     hinh_thuc: HinhThuc
-    noi_dung: str
+    
 
 
 class ThuChiResponse(ThuChiCreate):
