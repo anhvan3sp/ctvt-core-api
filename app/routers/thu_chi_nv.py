@@ -5,7 +5,7 @@ from datetime import datetime
 from app.database import get_db
 from app.models import ThuChi
 from app.auth_utils import get_current_user
-from app.schemas import LoaiThuChi, HinhThuc
+from app.schemas import ThuChiCreate
 
 router = APIRouter(prefix="/thu-chi-nv", tags=["thu_chi_nhan_vien"])
 
@@ -28,25 +28,24 @@ CHI_TYPES = [
 
 @router.post("/create")
 def create_thu_chi_nv(
-    loai: LoaiThuChi,
-    loai_giao_dich: str,
-    so_tien: float,
-    hinh_thuc: HinhThuc,
+    data: ThuChiCreate,
     db: Session = Depends(get_db),
     user = Depends(get_current_user)
 ):
 
-    # kiểm tra loại giao dịch
+    loai = data.loai
+    loai_giao_dich = data.loai_giao_dich
+    so_tien = data.so_tien
+    hinh_thuc = data.hinh_thuc
+
     if loai == "thu" and loai_giao_dich not in THU_TYPES:
         raise HTTPException(400, "loai_giao_dich không hợp lệ")
 
     if loai == "chi" and loai_giao_dich not in CHI_TYPES:
         raise HTTPException(400, "loai_giao_dich không hợp lệ")
 
-    # xác định quỹ
     doi_tuong = "nhan_vien" if hinh_thuc == "tien_mat" else "cong_ty"
 
-    # lấy số dư gần nhất
     last = (
         db.query(ThuChi)
         .filter(ThuChi.ma_nv == user.ma_nv)
@@ -56,7 +55,6 @@ def create_thu_chi_nv(
 
     so_du_hien_tai = last.so_du_sau if last else 0
 
-    # tính số dư mới
     if loai == "thu":
         so_du_moi = so_du_hien_tai + so_tien
     else:
@@ -83,42 +81,3 @@ def create_thu_chi_nv(
         "message": "Đã ghi thu chi",
         "so_du_sau": so_du_moi
     }
-
-
-@router.get("/so-du")
-def get_balance(
-    db: Session = Depends(get_db),
-    user = Depends(get_current_user)
-):
-
-    last = (
-        db.query(ThuChi)
-        .filter(ThuChi.ma_nv == user.ma_nv)
-        .order_by(ThuChi.id.desc())
-        .first()
-    )
-
-    so_du = last.so_du_sau if last else 0
-
-    return {
-        "ma_nv": user.ma_nv,
-        "so_du": so_du
-    }
-
-
-@router.get("/list")
-def list_thu_chi(
-    limit: int = 100,
-    db: Session = Depends(get_db),
-    user = Depends(get_current_user)
-):
-
-    data = (
-        db.query(ThuChi)
-        .filter(ThuChi.ma_nv == user.ma_nv)
-        .order_by(ThuChi.id.desc())
-        .limit(limit)
-        .all()
-    )
-
-    return data
