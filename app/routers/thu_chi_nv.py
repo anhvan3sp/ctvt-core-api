@@ -9,18 +9,51 @@ from app.auth_utils import get_current_user
 router = APIRouter(prefix="/thu-chi-nv", tags=["thu_chi_nhan_vien"])
 
 
-# ==============================
+# ============================
+# Danh mục giao dịch hợp lệ
+# ============================
+
+THU_TYPES = [
+    "khach_tra_no",
+    "khach_dat_hang",
+    "cho_hang_thue",
+    "thu_khac"
+]
+
+CHI_TYPES = [
+    "do_dau",
+    "sua_xe",
+    "dang_kiem",
+    "tien_doi",
+    "chi_khac"
+]
+
+
+# ============================
 # Tạo thu chi
-# ==============================
+# ============================
+
 @router.post("/create")
 def create_thu_chi_nv(
     loai: str,
+    loai_giao_dich: str,
     so_tien: float,
     hinh_thuc: str,
-    noi_dung: str,
+    noi_dung: str = "",
     db: Session = Depends(get_db),
     user = Depends(get_current_user)
 ):
+
+    # kiểm tra loại
+    if loai not in ["thu", "chi"]:
+        raise HTTPException(400, "loai phải là thu hoặc chi")
+
+    # kiểm tra loại giao dịch
+    if loai == "thu" and loai_giao_dich not in THU_TYPES:
+        raise HTTPException(400, "loai_giao_dich không hợp lệ")
+
+    if loai == "chi" and loai_giao_dich not in CHI_TYPES:
+        raise HTTPException(400, "loai_giao_dich không hợp lệ")
 
     # xác định quỹ
     if hinh_thuc == "tien_mat":
@@ -28,7 +61,7 @@ def create_thu_chi_nv(
     else:
         doi_tuong = "cong_ty"
 
-    # lấy giao dịch gần nhất của nhân viên
+    # lấy số dư gần nhất
     last = (
         db.query(ThuChi)
         .filter(ThuChi.ma_nv == user.ma_nv)
@@ -43,10 +76,7 @@ def create_thu_chi_nv(
         so_du_moi = so_du_hien_tai + so_tien
     else:
         if so_du_hien_tai < so_tien:
-            raise HTTPException(
-                status_code=400,
-                detail="Không đủ tiền trong quỹ"
-            )
+            raise HTTPException(400, "Không đủ tiền trong quỹ")
         so_du_moi = so_du_hien_tai - so_tien
 
     thu_chi = ThuChi(
@@ -57,6 +87,7 @@ def create_thu_chi_nv(
         loai=loai,
         hinh_thuc=hinh_thuc,
         noi_dung=noi_dung,
+        loai_giao_dich=loai_giao_dich,
         ngay_tao=datetime.now(),
         so_du_sau=so_du_moi
     )
@@ -70,9 +101,10 @@ def create_thu_chi_nv(
     }
 
 
-# ==============================
-# Lấy số dư quỹ nhân viên
-# ==============================
+# ============================
+# Số dư quỹ nhân viên
+# ============================
+
 @router.get("/so-du")
 def get_balance(
     db: Session = Depends(get_db),
@@ -94,9 +126,10 @@ def get_balance(
     }
 
 
-# ==============================
-# Danh sách thu chi
-# ==============================
+# ============================
+# Lịch sử thu chi
+# ============================
+
 @router.get("/list")
 def list_thu_chi(
     limit: int = 100,
