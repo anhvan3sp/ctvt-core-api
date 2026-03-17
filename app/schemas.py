@@ -7,12 +7,7 @@ from enum import Enum
 from pydantic import BaseModel
 from datetime import date
 
-class HoaDonNhapCreate(BaseModel):
-    ngay: date
-    ma_ncc: str
-    ma_kho: str
-    tong_tien: float
-    force_create: bool = False
+
 class DebtDetailResponse(BaseModel):
     ma_hoa_don: str
     ngay: date
@@ -114,7 +109,8 @@ class HoaDonNhapCreate(BaseModel):
     tien_mat: Decimal = Decimal("0")
     tien_ck: Decimal = Decimal("0")
     items: List[HoaDonNhapItemCreate]
-
+    tong_tien: float
+    force_create: bool = False
 
 class HoaDonNhapResponse(BaseModel):
     id: int
