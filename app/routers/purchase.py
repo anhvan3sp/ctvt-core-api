@@ -55,7 +55,6 @@ def create_purchase(
         HoaDonNhap.ma_nv == user.ma_nv,
         HoaDonNhap.ma_ncc == data.ma_ncc,
         HoaDonNhap.ma_kho == data.ma_kho,
-        HoaDonNhap.tong_tien == data.tong_tien,
         func.date(HoaDonNhap.ngay) == func.current_date()
     ).first()
 
