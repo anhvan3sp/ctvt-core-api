@@ -232,14 +232,9 @@ class QuyNhanVienChotNgay(Base):
 
     so_du = Column(DECIMAL(18, 2))
 
-    so_du_luy_ke = Column(DECIMAL(18, 2))
-
     ngay_tao = Column(DateTime)
 
 
-# ==============================
-# QUỸ CÔNG TY CHỐT NGÀY
-# ==============================
 
 # ==============================
 # QUỸ CÔNG TY CHỐT NGÀY
