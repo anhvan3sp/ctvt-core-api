@@ -6,7 +6,44 @@ from enum import Enum
 
 from pydantic import BaseModel
 from datetime import date
+from pydantic import BaseModel
+from typing import List
 
+
+class TonKhoDauKy(BaseModel):
+    ma_sp: str
+    ma_kho: str
+    so_luong: float
+
+
+class QuyNhanVienDauKy(BaseModel):
+    ma_nv: str
+    so_du: float
+
+
+class CongNoKhachHangDauKy(BaseModel):
+    ma_kh: str
+    so_no: float
+
+
+class CongNoNCCDauKy(BaseModel):
+    ma_ncc: str
+    so_no: float
+
+
+class KhoiTaoDauKyRequest(BaseModel):
+
+    ngay: str
+
+    ton_kho: List[TonKhoDauKy]
+
+    quy_nhan_vien: List[QuyNhanVienDauKy]
+
+    quy_cong_ty: float
+
+    cong_no_khach: List[CongNoKhachHangDauKy]
+
+    cong_no_ncc: List[CongNoNCCDauKy]
 
 class DebtDetailResponse(BaseModel):
     ma_hoa_don: str
