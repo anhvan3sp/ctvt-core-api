@@ -44,8 +44,6 @@ def create_thu_chi_nv(
     if data.loai == "chi" and data.loai_giao_dich not in CHI_TYPES:
         raise HTTPException(400, "loai_giao_dich không hợp lệ")
 
-    doi_tuong = "nhan_vien" if data.hinh_thuc == "tien_mat" else "cong_ty"
-
     last = (
         db.query(ThuChi)
         .filter(ThuChi.ma_nv == user.ma_nv)
@@ -67,7 +65,7 @@ def create_thu_chi_nv(
     thu_chi = ThuChi(
         ngay=datetime.now(),
         ma_nv=user.ma_nv,
-        doi_tuong=doi_tuong,
+        doi_tuong="nhan_vien",
         loai=data.loai,
         loai_giao_dich=data.loai_giao_dich,
         so_tien=data.so_tien,
@@ -102,7 +100,7 @@ def dashboard(
     last_quy = (
         db.query(QuyNhanVienChotNgay)
         .filter(QuyNhanVienChotNgay.ma_nv == user.ma_nv)
-        .order_by(QuyNhanVienChotNgay.id.desc())
+        .order_by(QuyNhanVienChotNgay.ngay_chot.desc())
         .first()
     )
 
@@ -132,36 +130,3 @@ def dashboard(
         "thu_hom_nay": thu,
         "chi_hom_nay": chi
     }
-
-
-# ====================================================
-# LIST LỊCH SỬ
-# ====================================================
-
-@router.get("/list")
-def list_thu_chi(
-    db: Session = Depends(get_db),
-    user = Depends(get_current_user)
-):
-
-    data = (
-        db.query(ThuChi)
-        .filter(ThuChi.ma_nv == user.ma_nv)
-        .order_by(ThuChi.id.desc())
-        .limit(100)
-        .all()
-    )
-
-    result = []
-
-    for i in data:
-        result.append({
-            "id": i.id,
-            "ngay": i.ngay,
-            "loai": i.loai,
-            "loai_giao_dich": i.loai_giao_dich,
-            "so_tien": i.so_tien,
-            "so_du": i.so_du_sau
-        })
-
-    return result
