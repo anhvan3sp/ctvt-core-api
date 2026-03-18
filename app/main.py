@@ -10,6 +10,8 @@ from app.routers import supplier, warehouse, product, report
 from app.routers import customer
 from app.routers import inventory
 from app.routers import thu_chi_nv
+from app.routers import system
+
 
 
 
@@ -26,7 +28,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(thu_chi_nv.router)
-
+app.include_router(system.router)
 app.include_router(inventory.router)
 app.include_router(report.router)
 app.include_router(customer.router)
