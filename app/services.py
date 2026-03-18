@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, text
 from decimal import Decimal
 from datetime import datetime
 from fastapi import HTTPException
@@ -18,6 +18,10 @@ from app.models import (
 
 from app.schemas import HoaDonNhapCreate, HoaDonBanCreate
 
+
+# =====================================================
+# CHI TIẾT HÓA ĐƠN BÁN
+# =====================================================
 def get_sale_detail(db: Session, hoa_don_id: int):
 
     hd = db.query(HoaDonBan).filter(HoaDonBan.id == hoa_don_id).first()
@@ -31,7 +35,10 @@ def get_sale_detail(db: Session, hoa_don_id: int):
     items = []
 
     for ct in chi_tiet:
-        sp = db.query(SanPham).filter(SanPham.ma_sp == ct.ma_sp).first()
+
+        sp = db.query(SanPham).filter(
+            SanPham.ma_sp == ct.ma_sp
+        ).first()
 
         items.append({
             "ma_sp": ct.ma_sp,
@@ -47,31 +54,6 @@ def get_sale_detail(db: Session, hoa_don_id: int):
         "items": items
     }
 
-def get_debt_detail(db: Session, ma_kh: str):
-
-    hoa_dons = (
-        db.query(HoaDonBan)
-        .filter(HoaDonBan.ma_kh == ma_kh)
-        .filter(HoaDonBan.no_lai > 0)
-        .order_by(HoaDonBan.ngay.asc())
-        .all()
-    )
-
-    result = []
-
-    for hd in hoa_dons:
-
-        so_hd = hd.so_hd if hd.so_hd else str(hd.id)
-
-        result.append({
-            "ma_hoa_don": so_hd,
-            "ngay": hd.ngay,
-            "tong_tien": float(hd.tong_tien or 0),
-            "da_tra": float((hd.tong_tien or 0) - (hd.no_lai or 0)),
-            "con_no": float(hd.no_lai or 0)
-        })
-
-    return result
 
 # =====================================================
 # NHẬP HÀNG
@@ -79,6 +61,7 @@ def get_debt_detail(db: Session, ma_kh: str):
 def create_hoa_don_nhap(db: Session, data: HoaDonNhapCreate, user: NhanVien):
 
     try:
+
         tong_tien = Decimal("0")
 
         hoa_don = HoaDonNhap(
@@ -120,33 +103,9 @@ def create_hoa_don_nhap(db: Session, data: HoaDonNhapCreate, user: NhanVien):
         hoa_don.tong_tien = tong_tien
         hoa_don.tong_thanh_toan = tong_tien
 
-        tien_mat = Decimal(str(data.tien_mat))
-        tien_ck = Decimal(str(data.tien_ck))
-
-        if tien_mat > 0:
-            db.add(ThuChi(
-                ngay=datetime.utcnow(),
-                doi_tuong="cong_ty",
-                ma_nv=user.ma_nv,
-                so_tien=tien_mat,
-                loai="chi",
-                hinh_thuc="tien_mat",
-                noi_dung=f"Chi tiền mặt nhập hàng HĐ {hoa_don.id}"
-            ))
-
-        if tien_ck > 0:
-            db.add(ThuChi(
-                ngay=datetime.utcnow(),
-                doi_tuong="cong_ty",
-                ma_nv=user.ma_nv,
-                so_tien=tien_ck,
-                loai="chi",
-                hinh_thuc="chuyen_khoan",
-                noi_dung=f"Chi chuyển khoản nhập hàng HĐ {hoa_don.id}"
-            ))
-
         db.commit()
         db.refresh(hoa_don)
+
         return hoa_don
 
     except Exception as e:
@@ -155,33 +114,39 @@ def create_hoa_don_nhap(db: Session, data: HoaDonNhapCreate, user: NhanVien):
 
 
 # =====================================================
-# BÁN HÀNG (LOGIC CÔNG NỢ CHUẨN ERP)
+# BÁN HÀNG (ĐÃ SỬA TỒN KHO)
 # =====================================================
 def create_hoa_don_ban(db: Session, data: HoaDonBanCreate, user: NhanVien):
 
     try:
+
         tong_tien = Decimal("0")
 
         # ===== KIỂM TRA KHÁCH =====
-        kh = db.query(KhachHang).filter(KhachHang.ma_kh == data.ma_kh).first()
-        if not kh:
-            raise HTTPException(status_code=400, detail="Khách hàng không tồn tại")
+        kh = db.query(KhachHang).filter(
+            KhachHang.ma_kh == data.ma_kh
+        ).first()
 
-        # ===== TẠO SỐ HÓA ĐƠN TỰ ĐỘNG =====
-        last_hd = db.query(HoaDonBan).order_by(HoaDonBan.id.desc()).first()
+        if not kh:
+            raise HTTPException(400, "Khách hàng không tồn tại")
+
+        # ===== TẠO SỐ HÓA ĐƠN =====
+        last_hd = db.query(HoaDonBan).order_by(
+            HoaDonBan.id.desc()
+        ).first()
+
+        so_moi = 1
 
         if last_hd and last_hd.so_hd:
             try:
                 so_moi = int(last_hd.so_hd.replace("HD", "")) + 1
             except:
                 so_moi = last_hd.id + 1
-        else:
-            so_moi = 1
 
-        so_hd_moi = f"HD{so_moi:05d}"
+        so_hd = f"HD{so_moi:05d}"
 
         hoa_don = HoaDonBan(
-            so_hd=so_hd_moi,
+            so_hd=so_hd,
             ngay=data.ngay,
             ma_kh=data.ma_kh,
             ma_nv=user.ma_nv,
@@ -194,32 +159,34 @@ def create_hoa_don_ban(db: Session, data: HoaDonBanCreate, user: NhanVien):
         db.add(hoa_don)
         db.flush()
 
-        # ===== XỬ LÝ SẢN PHẨM & TỒN =====
+        # ===== XỬ LÝ SẢN PHẨM =====
         for item in data.items:
 
-            sp = db.query(SanPham).filter(SanPham.ma_sp == item.ma_sp).first()
+            sp = db.query(SanPham).filter(
+                SanPham.ma_sp == item.ma_sp
+            ).first()
+
             if not sp:
-                raise HTTPException(status_code=400, detail=f"Sản phẩm {item.ma_sp} không tồn tại")
+                raise HTTPException(400, f"Sản phẩm {item.ma_sp} không tồn tại")
 
-            tong_nhap = db.query(
-                func.coalesce(func.sum(NhatKyKho.so_luong), 0)
-            ).filter(
-                NhatKyKho.ma_sp == item.ma_sp,
-                NhatKyKho.ma_kho == data.ma_kho,
-                NhatKyKho.loai == "nhap"
-            ).scalar()
+            # ===== ĐỌC TỒN TỪ SNAPSHOT =====
+            sql = text("""
+            SELECT so_luong
+            FROM ton_kho_chot_ngay
+            WHERE ma_kho = :ma_kho
+            AND ma_sp = :ma_sp
+            ORDER BY ngay DESC
+            LIMIT 1
+            """)
 
-            tong_xuat = db.query(
-                func.coalesce(func.sum(NhatKyKho.so_luong), 0)
-            ).filter(
-                NhatKyKho.ma_sp == item.ma_sp,
-                NhatKyKho.ma_kho == data.ma_kho,
-                NhatKyKho.loai == "xuat"
-            ).scalar()
+            row = db.execute(sql, {
+                "ma_kho": data.ma_kho,
+                "ma_sp": item.ma_sp
+            }).fetchone()
 
-            so_ton = Decimal(str(tong_nhap)) - Decimal(str(tong_xuat))
+            ton = Decimal(str(row[0])) if row else Decimal("0")
 
-            if so_ton < Decimal(str(item.so_luong)):
+            if ton < Decimal(str(item.so_luong)):
                 raise HTTPException(
                     status_code=400,
                     detail=f"Tồn kho không đủ cho {item.ma_sp}"
@@ -246,20 +213,20 @@ def create_hoa_don_ban(db: Session, data: HoaDonBanCreate, user: NhanVien):
                 id_tham_chieu=hoa_don.id
             ))
 
-        # ===== XỬ LÝ TIỀN & CÔNG NỢ =====
-
+        # ===== TIỀN =====
         tien_mat = Decimal(str(data.tien_mat))
         tien_ck = Decimal(str(data.tien_ck))
-        tong_da_tra = tien_mat + tien_ck
 
+        tong_da_tra = tien_mat + tien_ck
         no_moi = tong_tien - tong_da_tra
 
         hoa_don.tong_tien = tong_tien
         hoa_don.tong_thanh_toan = tong_da_tra
         hoa_don.no_lai = no_moi
 
-        # ===== GHI THU TIỀN =====
+        # ===== THU TIỀN =====
         if tien_mat > 0:
+
             db.add(ThuChi(
                 ngay=datetime.utcnow(),
                 doi_tuong="nhan_vien" if user.vai_tro == "nv_dac_biet" else "cong_ty",
@@ -267,10 +234,11 @@ def create_hoa_don_ban(db: Session, data: HoaDonBanCreate, user: NhanVien):
                 so_tien=tien_mat,
                 loai="thu",
                 hinh_thuc="tien_mat",
-                noi_dung=f"Thu tiền mặt HĐ {so_hd_moi}"
+                noi_dung=f"Thu tiền mặt HĐ {so_hd}"
             ))
 
         if tien_ck > 0:
+
             db.add(ThuChi(
                 ngay=datetime.utcnow(),
                 doi_tuong="cong_ty",
@@ -278,7 +246,7 @@ def create_hoa_don_ban(db: Session, data: HoaDonBanCreate, user: NhanVien):
                 so_tien=tien_ck,
                 loai="thu",
                 hinh_thuc="chuyen_khoan",
-                noi_dung=f"Thu chuyển khoản HĐ {so_hd_moi}"
+                noi_dung=f"Thu chuyển khoản HĐ {so_hd}"
             ))
 
         db.commit()
