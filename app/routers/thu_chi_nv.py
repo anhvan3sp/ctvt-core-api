@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 
 from app.database import get_db
 from app.models import ThuChi, QuyNhanVienChotNgay, QuyCongTyChotNgay
@@ -38,12 +38,14 @@ def create_thu_chi_nv(
     user = Depends(get_current_user)
 ):
 
+    # kiểm tra loại giao dịch
     if data.loai == "thu" and data.loai_giao_dich not in THU_TYPES:
         raise HTTPException(400, "loai_giao_dich không hợp lệ")
 
     if data.loai == "chi" and data.loai_giao_dich not in CHI_TYPES:
         raise HTTPException(400, "loai_giao_dich không hợp lệ")
 
+    # lấy số dư cuối cùng của nhân viên
     last = (
         db.query(ThuChi)
         .filter(ThuChi.ma_nv == user.ma_nv)
@@ -51,10 +53,12 @@ def create_thu_chi_nv(
         .first()
     )
 
-    so_du_hien_tai = last.so_du_sau if last else 0
+    so_du_hien_tai = float(last.so_du_sau) if last else 0
 
+    # tính số dư mới
     if data.loai == "thu":
         so_du_moi = so_du_hien_tai + data.so_tien
+
     else:
 
         if so_du_hien_tai < data.so_tien:
@@ -95,6 +99,9 @@ def dashboard(
 
     today = date.today()
 
+    start = datetime.combine(today, datetime.min.time())
+    end = start + timedelta(days=1)
+
     # ===============================
     # ADMIN → QUỸ CÔNG TY
     # ===============================
@@ -107,18 +114,23 @@ def dashboard(
             .first()
         )
 
-        quy_hien_tai = last_quy.tong_quy if last_quy else 0
+        quy_hien_tai = float(last_quy.tong_quy) if last_quy else 0
 
-        thu = db.query(func.sum(ThuChi.so_tien)).filter(
+        thu = db.query(
+            func.coalesce(func.sum(ThuChi.so_tien), 0)
+        ).filter(
             ThuChi.loai == "thu",
-            func.date(ThuChi.ngay) == today
-        ).scalar() or 0
+            ThuChi.ngay >= start,
+            ThuChi.ngay < end
+        ).scalar()
 
-        chi = db.query(func.sum(ThuChi.so_tien)).filter(
+        chi = db.query(
+            func.coalesce(func.sum(ThuChi.so_tien), 0)
+        ).filter(
             ThuChi.loai == "chi",
-            func.date(ThuChi.ngay) == today
-        ).scalar() or 0
-
+            ThuChi.ngay >= start,
+            ThuChi.ngay < end
+        ).scalar()
 
     # ===============================
     # NHÂN VIÊN → QUỸ CÁ NHÂN
@@ -133,23 +145,28 @@ def dashboard(
             .first()
         )
 
-        quy_hien_tai = last_quy.so_du if last_quy else 0
+        quy_hien_tai = float(last_quy.so_du) if last_quy else 0
 
-        thu = db.query(func.sum(ThuChi.so_tien)).filter(
+        thu = db.query(
+            func.coalesce(func.sum(ThuChi.so_tien), 0)
+        ).filter(
             ThuChi.ma_nv == user.ma_nv,
             ThuChi.loai == "thu",
-            func.date(ThuChi.ngay) == today
-        ).scalar() or 0
+            ThuChi.ngay >= start,
+            ThuChi.ngay < end
+        ).scalar()
 
-        chi = db.query(func.sum(ThuChi.so_tien)).filter(
+        chi = db.query(
+            func.coalesce(func.sum(ThuChi.so_tien), 0)
+        ).filter(
             ThuChi.ma_nv == user.ma_nv,
             ThuChi.loai == "chi",
-            func.date(ThuChi.ngay) == today
-        ).scalar() or 0
-
+            ThuChi.ngay >= start,
+            ThuChi.ngay < end
+        ).scalar()
 
     return {
-        "quy_hien_tai": quy_hien_tai,
-        "thu_hom_nay": thu,
-        "chi_hom_nay": chi
+        "quy_hien_tai": float(quy_hien_tai),
+        "thu_hom_nay": float(thu),
+        "chi_hom_nay": float(chi)
     }
