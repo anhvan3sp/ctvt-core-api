@@ -26,6 +26,10 @@ CHI_TYPES = [
 ]
 
 
+# =====================================
+# CREATE THU CHI
+# =====================================
+
 @router.post("/create")
 def create_thu_chi_nv(
     data: ThuChiCreate,
@@ -46,6 +50,7 @@ def create_thu_chi_nv(
 
     doi_tuong = "nhan_vien" if hinh_thuc == "tien_mat" else "cong_ty"
 
+    # lấy số dư gần nhất
     last = (
         db.query(ThuChi)
         .filter(ThuChi.ma_nv == user.ma_nv)
@@ -81,3 +86,92 @@ def create_thu_chi_nv(
         "message": "Đã ghi thu chi",
         "so_du_sau": so_du_moi
     }
+
+
+# =====================================
+# SO DU QUY
+# =====================================
+
+@router.get("/so-du")
+def get_so_du(
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user)
+):
+
+    # nếu admin -> lấy quỹ công ty
+    if user.role == "admin":
+
+        last = (
+            db.query(ThuChi)
+            .filter(ThuChi.doi_tuong == "cong_ty")
+            .order_by(ThuChi.id.desc())
+            .first()
+        )
+
+        so_du = last.so_du_sau if last else 0
+
+        return {
+            "loai_quy": "quy_cong_ty",
+            "so_du": so_du
+        }
+
+    # nếu nhân viên -> lấy quỹ nhân viên
+    last = (
+        db.query(ThuChi)
+        .filter(ThuChi.ma_nv == user.ma_nv)
+        .order_by(ThuChi.id.desc())
+        .first()
+    )
+
+    so_du = last.so_du_sau if last else 0
+
+    return {
+        "loai_quy": "quy_nhan_vien",
+        "ma_nv": user.ma_nv,
+        "so_du": so_du
+    }
+
+
+# =====================================
+# LIST LICH SU
+# =====================================
+
+@router.get("/list")
+def list_thu_chi(
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user)
+):
+
+    if user.role == "admin":
+
+        data = (
+            db.query(ThuChi)
+            .order_by(ThuChi.id.desc())
+            .limit(50)
+            .all()
+        )
+
+    else:
+
+        data = (
+            db.query(ThuChi)
+            .filter(ThuChi.ma_nv == user.ma_nv)
+            .order_by(ThuChi.id.desc())
+            .limit(50)
+            .all()
+        )
+
+    result = []
+
+    for i in data:
+        result.append({
+            "id": i.id,
+            "ngay": i.ngay,
+            "loai": i.loai,
+            "loai_giao_dich": i.loai_giao_dich,
+            "so_tien": i.so_tien,
+            "so_du_sau": i.so_du_sau,
+            "ma_nv": i.ma_nv
+        })
+
+    return result
