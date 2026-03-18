@@ -176,7 +176,7 @@ class NhatKyKho(Base):
 
     ma_sp = Column(String(50))
     ma_kho = Column(String(20))
-
+    ma_nv = Column(String(20))
     so_luong = Column(DECIMAL(10, 2))
 
     loai = Column(Enum("nhap", "xuat"))
