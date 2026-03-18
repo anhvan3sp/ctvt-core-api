@@ -4,7 +4,7 @@ from sqlalchemy import func
 from datetime import datetime, date
 
 from app.database import get_db
-from app.models import ThuChi, QuyNhanVienChotNgay
+from app.models import ThuChi, QuyNhanVienChotNgay, QuyCongTyChotNgay
 from app.auth_utils import get_current_user
 from app.schemas import ThuChiCreate
 
@@ -95,34 +95,57 @@ def dashboard(
 
     today = date.today()
 
-    # -------- QUỸ HIỆN TẠI --------
+    # =================================================
+    # ADMIN → QUỸ CÔNG TY
+    # =================================================
 
-    last_quy = (
-        db.query(QuyNhanVienChotNgay)
-        .filter(QuyNhanVienChotNgay.ma_nv == user.ma_nv)
-        .order_by(QuyNhanVienChotNgay.ngay_chot.desc())
-        .first()
-    )
+    if user.role == "admin":
 
-    quy_hien_tai = last_quy.so_du if last_quy else 0
+        last_quy = (
+            db.query(QuyCongTyChotNgay)
+            .order_by(QuyCongTyChotNgay.ngay_chot.desc())
+            .first()
+        )
+
+        quy_hien_tai = last_quy.tong_quy if last_quy else 0
+
+        thu = db.query(func.sum(ThuChi.so_tien)).filter(
+            ThuChi.loai == "thu",
+            func.date(ThuChi.ngay) == today
+        ).scalar() or 0
+
+        chi = db.query(func.sum(ThuChi.so_tien)).filter(
+            ThuChi.loai == "chi",
+            func.date(ThuChi.ngay) == today
+        ).scalar() or 0
 
 
-    # -------- THU HÔM NAY --------
+    # =================================================
+    # NHÂN VIÊN → QUỸ CÁ NHÂN
+    # =================================================
 
-    thu = db.query(func.sum(ThuChi.so_tien)).filter(
-        ThuChi.ma_nv == user.ma_nv,
-        ThuChi.loai == "thu",
-        func.date(ThuChi.ngay) == today
-    ).scalar() or 0
+    else:
 
+        last_quy = (
+            db.query(QuyNhanVienChotNgay)
+            .filter(QuyNhanVienChotNgay.ma_nv == user.ma_nv)
+            .order_by(QuyNhanVienChotNgay.ngay_chot.desc())
+            .first()
+        )
 
-    # -------- CHI HÔM NAY --------
+        quy_hien_tai = last_quy.so_du if last_quy else 0
 
-    chi = db.query(func.sum(ThuChi.so_tien)).filter(
-        ThuChi.ma_nv == user.ma_nv,
-        ThuChi.loai == "chi",
-        func.date(ThuChi.ngay) == today
-    ).scalar() or 0
+        thu = db.query(func.sum(ThuChi.so_tien)).filter(
+            ThuChi.ma_nv == user.ma_nv,
+            ThuChi.loai == "thu",
+            func.date(ThuChi.ngay) == today
+        ).scalar() or 0
+
+        chi = db.query(func.sum(ThuChi.so_tien)).filter(
+            ThuChi.ma_nv == user.ma_nv,
+            ThuChi.loai == "chi",
+            func.date(ThuChi.ngay) == today
+        ).scalar() or 0
 
 
     return {
@@ -130,3 +153,36 @@ def dashboard(
         "thu_hom_nay": thu,
         "chi_hom_nay": chi
     }
+
+
+# ====================================================
+# LIST LỊCH SỬ
+# ====================================================
+
+@router.get("/list")
+def list_thu_chi(
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user)
+):
+
+    data = (
+        db.query(ThuChi)
+        .filter(ThuChi.ma_nv == user.ma_nv)
+        .order_by(ThuChi.id.desc())
+        .limit(100)
+        .all()
+    )
+
+    result = []
+
+    for i in data:
+        result.append({
+            "id": i.id,
+            "ngay": i.ngay,
+            "loai": i.loai,
+            "loai_giao_dich": i.loai_giao_dich,
+            "so_tien": i.so_tien,
+            "so_du": i.so_du_sau
+        })
+
+    return result
