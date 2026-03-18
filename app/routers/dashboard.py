@@ -7,7 +7,8 @@ from app.database import get_db
 from app.models import (
     ThuChi,
     QuyNhanVienChotNgay,
-    QuyCongTyChotNgay
+    QuyCongTyChotNgay,
+    NhatKyKho
 )
 from app.auth_utils import get_current_user
 
@@ -21,6 +22,16 @@ def dashboard(
 ):
 
     today = date.today()
+
+    # ================================
+    # SỐ BÌNH BÁN HÔM NAY
+    # ================================
+    ban_hom_nay = db.query(
+        func.coalesce(func.sum(NhatKyKho.so_luong), 0)
+    ).filter(
+        NhatKyKho.loai == "xuat",
+        func.date(NhatKyKho.ngay) == today
+    ).scalar()
 
     # =================================
     # ADMIN → QUỸ CÔNG TY
@@ -50,6 +61,7 @@ def dashboard(
 
         return {
             "loai": "cong_ty",
+            "ban_hom_nay": float(ban_hom_nay),
             "tien_mat": float(tien_mat),
             "tien_ngan_hang": float(tien_ngan_hang),
             "tong_quy": float(tong_quy),
@@ -86,6 +98,7 @@ def dashboard(
 
         return {
             "loai": "nhan_vien",
+            "ban_hom_nay": float(ban_hom_nay),
             "so_du": float(so_du),
             "thu_hom_nay": float(thu),
             "chi_hom_nay": float(chi)
