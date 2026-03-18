@@ -95,11 +95,11 @@ def dashboard(
 
     today = date.today()
 
-    # =================================================
+    # ===============================
     # ADMIN → QUỸ CÔNG TY
-    # =================================================
+    # ===============================
 
-    if user.role == "admin":
+    if user.ma_nv == "admin":
 
         last_quy = (
             db.query(QuyCongTyChotNgay)
@@ -120,9 +120,9 @@ def dashboard(
         ).scalar() or 0
 
 
-    # =================================================
+    # ===============================
     # NHÂN VIÊN → QUỸ CÁ NHÂN
-    # =================================================
+    # ===============================
 
     else:
 
@@ -153,36 +153,3 @@ def dashboard(
         "thu_hom_nay": thu,
         "chi_hom_nay": chi
     }
-
-
-# ====================================================
-# LIST LỊCH SỬ
-# ====================================================
-
-@router.get("/list")
-def list_thu_chi(
-    db: Session = Depends(get_db),
-    user = Depends(get_current_user)
-):
-
-    data = (
-        db.query(ThuChi)
-        .filter(ThuChi.ma_nv == user.ma_nv)
-        .order_by(ThuChi.id.desc())
-        .limit(100)
-        .all()
-    )
-
-    result = []
-
-    for i in data:
-        result.append({
-            "id": i.id,
-            "ngay": i.ngay,
-            "loai": i.loai,
-            "loai_giao_dich": i.loai_giao_dich,
-            "so_tien": i.so_tien,
-            "so_du": i.so_du_sau
-        })
-
-    return result
