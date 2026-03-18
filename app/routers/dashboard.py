@@ -34,9 +34,9 @@ def dashboard(
             .first()
         )
 
-        tien_mat = quy.tien_mat if quy else 0
-        tien_ngan_hang = quy.tien_ngan_hang if quy else 0
-        tong_quy = quy.tong_quy if quy else 0
+        tien_mat = float(quy.tien_mat) if quy else 0
+        tien_ngan_hang = float(quy.tien_ngan_hang) if quy else 0
+        tong_quy = float(quy.tong_quy) if quy else 0
 
         thu = db.query(func.sum(ThuChi.so_tien)).filter(
             ThuChi.loai == "thu",
@@ -50,11 +50,11 @@ def dashboard(
 
         return {
             "loai": "cong_ty",
-            "tien_mat": tien_mat,
-            "tien_ngan_hang": tien_ngan_hang,
-            "tong_quy": tong_quy,
-            "thu_hom_nay": thu,
-            "chi_hom_nay": chi
+            "tien_mat": float(tien_mat),
+            "tien_ngan_hang": float(tien_ngan_hang),
+            "tong_quy": float(tong_quy),
+            "thu_hom_nay": float(thu),
+            "chi_hom_nay": float(chi)
         }
 
     # =================================
@@ -70,7 +70,7 @@ def dashboard(
             .first()
         )
 
-        so_du = quy.so_du if quy else 0
+        so_du = float(quy.so_du) if quy else 0
 
         thu = db.query(func.sum(ThuChi.so_tien)).filter(
             ThuChi.ma_nv == user.ma_nv,
@@ -86,7 +86,7 @@ def dashboard(
 
         return {
             "loai": "nhan_vien",
-            "so_du": so_du,
-            "thu_hom_nay": thu,
-            "chi_hom_nay": chi
+            "so_du": float(so_du),
+            "thu_hom_nay": float(thu),
+            "chi_hom_nay": float(chi)
         }
