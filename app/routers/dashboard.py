@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from datetime import date, datetime, timedelta
+from datetime import date
 
 from app.database import get_db
 from app.models import (
@@ -23,21 +23,34 @@ def dashboard(
 
     today = date.today()
 
-    start = datetime.combine(today, datetime.min.time())
-    end = start + timedelta(days=1)
+    # ================================
+    # SỐ BÌNH BÁN HÔM NAY
+    # ================================
 
-    # =================================
-    # ADMIN → DASHBOARD TOÀN CÔNG TY
-    # =================================
     if user.ma_nv == "admin":
 
         ban_hom_nay = db.query(
             func.coalesce(func.sum(NhatKyKho.so_luong), 0)
         ).filter(
             NhatKyKho.loai == "xuat",
-            NhatKyKho.ngay >= start,
-            NhatKyKho.ngay < end
+            func.date(NhatKyKho.ngay) == today
         ).scalar()
+
+    else:
+
+        ban_hom_nay = db.query(
+            func.coalesce(func.sum(NhatKyKho.so_luong), 0)
+        ).filter(
+            NhatKyKho.ma_nv == user.ma_nv,
+            NhatKyKho.loai == "xuat",
+            func.date(NhatKyKho.ngay) == today
+        ).scalar()
+
+    # =================================
+    # ADMIN → QUỸ CÔNG TY
+    # =================================
+
+    if user.ma_nv == "admin":
 
         quy = (
             db.query(QuyCongTyChotNgay)
@@ -53,16 +66,14 @@ def dashboard(
             func.coalesce(func.sum(ThuChi.so_tien), 0)
         ).filter(
             ThuChi.loai == "thu",
-            ThuChi.ngay >= start,
-            ThuChi.ngay < end
+            func.date(ThuChi.ngay) == today
         ).scalar()
 
         chi = db.query(
             func.coalesce(func.sum(ThuChi.so_tien), 0)
         ).filter(
             ThuChi.loai == "chi",
-            ThuChi.ngay >= start,
-            ThuChi.ngay < end
+            func.date(ThuChi.ngay) == today
         ).scalar()
 
         return {
@@ -76,18 +87,10 @@ def dashboard(
         }
 
     # =================================
-    # NHÂN VIÊN → DASHBOARD CÁ NHÂN
+    # NHÂN VIÊN → QUỸ CÁ NHÂN
     # =================================
-    else:
 
-        ban_hom_nay = db.query(
-            func.coalesce(func.sum(NhatKyKho.so_luong), 0)
-        ).filter(
-            NhatKyKho.ma_nv == user.ma_nv,
-            NhatKyKho.loai == "xuat",
-            NhatKyKho.ngay >= start,
-            NhatKyKho.ngay < end
-        ).scalar()
+    else:
 
         quy = (
             db.query(QuyNhanVienChotNgay)
@@ -103,8 +106,7 @@ def dashboard(
         ).filter(
             ThuChi.ma_nv == user.ma_nv,
             ThuChi.loai == "thu",
-            ThuChi.ngay >= start,
-            ThuChi.ngay < end
+            func.date(ThuChi.ngay) == today
         ).scalar()
 
         chi = db.query(
@@ -112,8 +114,7 @@ def dashboard(
         ).filter(
             ThuChi.ma_nv == user.ma_nv,
             ThuChi.loai == "chi",
-            ThuChi.ngay >= start,
-            ThuChi.ngay < end
+            func.date(ThuChi.ngay) == today
         ).scalar()
 
         return {
