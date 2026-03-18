@@ -1,7 +1,6 @@
 from fastapi import FastAPI, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-
 from app.database import get_db
 from app.routers import auth, purchase, sale, stock, finance
 from app.auth_utils import get_password_hash
@@ -11,9 +10,7 @@ from app.routers import customer
 from app.routers import inventory
 from app.routers import thu_chi_nv
 from app.routers import system
-
-
-
+from app.routers import dashboard
 
 app = FastAPI()
 
@@ -27,6 +24,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.include_router(dashboard.router)
 app.include_router(thu_chi_nv.router)
 app.include_router(system.router)
 app.include_router(inventory.router)
