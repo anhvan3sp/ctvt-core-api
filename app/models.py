@@ -7,13 +7,14 @@ from datetime import datetime
 # ==============================
 # NHÂN VIÊN
 # ==============================
+
 class NhanVien(Base):
     __tablename__ = "nhan_vien"
 
     id = Column(Integer, primary_key=True)
     ma_nv = Column(String(50), unique=True, nullable=False)
     ten_nv = Column(String(255))
-    vai_tro = Column(Enum("admin", "ke_toan", "nv_dac_biet", "nhan_vien", "ke_toan_online"), nullable=False)
+    vai_tro = Column(Enum("admin", "ke_toan", "nv_dac_biet", "nhan_vien", "ke_toan_online"))
     trang_thai = Column(Enum("hoat_dong", "ngung"), default="hoat_dong")
     password_hash = Column(String(255))
     ngay_tao = Column(DateTime, default=datetime.utcnow)
@@ -22,6 +23,7 @@ class NhanVien(Base):
 # ==============================
 # KHO HÀNG
 # ==============================
+
 class KhoHang(Base):
     __tablename__ = "kho_hang"
 
@@ -34,6 +36,7 @@ class KhoHang(Base):
 # ==============================
 # NHÀ CUNG CẤP
 # ==============================
+
 class NhaCungCap(Base):
     __tablename__ = "nha_cung_cap"
 
@@ -50,6 +53,7 @@ class NhaCungCap(Base):
 # ==============================
 # KHÁCH HÀNG
 # ==============================
+
 class KhachHang(Base):
     __tablename__ = "khach_hang"
 
@@ -67,6 +71,7 @@ class KhachHang(Base):
 # ==============================
 # SẢN PHẨM
 # ==============================
+
 class SanPham(Base):
     __tablename__ = "san_pham"
 
@@ -82,6 +87,7 @@ class SanPham(Base):
 # ==============================
 # HÓA ĐƠN NHẬP
 # ==============================
+
 class HoaDonNhap(Base):
     __tablename__ = "hoa_don_nhap"
 
@@ -95,7 +101,9 @@ class HoaDonNhap(Base):
     tien_mat = Column(DECIMAL(18, 2))
     tien_ck = Column(DECIMAL(18, 2))
     tong_thanh_toan = Column(DECIMAL(18, 2))
+
     trang_thai = Column(Enum("nhap", "xac_nhan", "chot", "huy"), default="nhap")
+
     ngay_tao = Column(DateTime, default=datetime.utcnow)
 
     items = relationship("HoaDonNhapChiTiet", back_populates="hoa_don")
@@ -118,12 +126,15 @@ class HoaDonNhapChiTiet(Base):
 # ==============================
 # HÓA ĐƠN BÁN
 # ==============================
+
 class HoaDonBan(Base):
     __tablename__ = "hoa_don_ban"
 
     id = Column(Integer, primary_key=True)
     so_hd = Column(String(50))
+
     ngay = Column(Date)
+
     ma_kh = Column(String(50), ForeignKey("khach_hang.ma_kh"))
     ma_nv = Column(String(50), ForeignKey("nhan_vien.ma_nv"))
     ma_kho = Column(String(20), ForeignKey("kho_hang.ma_kho"))
@@ -132,9 +143,11 @@ class HoaDonBan(Base):
     tien_mat = Column(DECIMAL(18, 2))
     tien_ck = Column(DECIMAL(18, 2))
     tong_thanh_toan = Column(DECIMAL(18, 2))
+
     no_lai = Column(DECIMAL(18, 2))
 
     trang_thai = Column(Enum("nhap", "xac_nhan", "chot", "huy"), default="nhap")
+
     ngay_tao = Column(DateTime, default=datetime.utcnow)
 
 
@@ -153,17 +166,24 @@ class HoaDonBanChiTiet(Base):
 # ==============================
 # NHẬT KÝ KHO
 # ==============================
+
 class NhatKyKho(Base):
     __tablename__ = "nhat_ky_kho"
 
     id = Column(Integer, primary_key=True)
+
     ngay = Column(DateTime)
+
     ma_sp = Column(String(50))
     ma_kho = Column(String(20))
+
     so_luong = Column(DECIMAL(10, 2))
+
     loai = Column(Enum("nhap", "xuat"))
+
     bang_tham_chieu = Column(String(50))
     id_tham_chieu = Column(Integer)
+
     ngay_tao = Column(DateTime, default=datetime.utcnow)
 
 
@@ -171,16 +191,83 @@ class NhatKyKho(Base):
 # THU CHI
 # ==============================
 
-
 class ThuChi(Base):
     __tablename__ = "thu_chi"
 
     id = Column(Integer, primary_key=True)
+
     ngay = Column(DateTime, nullable=False)
-    doi_tuong = Column(Enum("nhan_vien", "cong_ty"), nullable=False)
+
+    doi_tuong = Column(Enum("nhan_vien", "cong_ty"))
+
     ma_nv = Column(String(50), ForeignKey("nhan_vien.ma_nv"))
+
     so_tien = Column(DECIMAL(18, 2))
+
     loai = Column(Enum("thu", "chi"))
+
     hinh_thuc = Column(Enum("tien_mat", "chuyen_khoan"))
+
+    loai_giao_dich = Column(String(100))
+
     noi_dung = Column(String(255))
+
+    so_du_sau = Column(DECIMAL(18, 2))
+
     ngay_tao = Column(DateTime, default=datetime.utcnow)
+
+
+# ==============================
+# QUỸ NHÂN VIÊN CHỐT NGÀY
+# ==============================
+
+class QuyNhanVienChotNgay(Base):
+    __tablename__ = "quy_nhan_vien_chot_ngay"
+
+    id = Column(Integer, primary_key=True)
+
+    ngay_chot = Column(Date)
+
+    ma_nv = Column(String(50))
+
+    so_du = Column(DECIMAL(18, 2))
+
+    so_du_luy_ke = Column(DECIMAL(18, 2))
+
+    ngay_tao = Column(DateTime)
+
+
+# ==============================
+# QUỸ CÔNG TY CHỐT NGÀY
+# ==============================
+
+class QuyCongTyChotNgay(Base):
+    __tablename__ = "quy_cong_ty_chot_ngay"
+
+    id = Column(Integer, primary_key=True)
+
+    ngay_chot = Column(Date)
+
+    so_du = Column(DECIMAL(18, 2))
+
+    ngay_tao = Column(DateTime)
+
+
+# ==============================
+# TỒN KHO CHỐT NGÀY
+# ==============================
+
+class TonKhoChotNgay(Base):
+    __tablename__ = "ton_kho_chot_ngay"
+
+    id = Column(Integer, primary_key=True)
+
+    ngay_chot = Column(Date)
+
+    ma_sp = Column(String(50))
+
+    ma_kho = Column(String(20))
+
+    so_luong = Column(DECIMAL(10, 2))
+
+    ngay_tao = Column(DateTime)
