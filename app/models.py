@@ -241,6 +241,10 @@ class QuyNhanVienChotNgay(Base):
 # QUỸ CÔNG TY CHỐT NGÀY
 # ==============================
 
+# ==============================
+# QUỸ CÔNG TY CHỐT NGÀY
+# ==============================
+
 class QuyCongTyChotNgay(Base):
     __tablename__ = "quy_cong_ty_chot_ngay"
 
@@ -248,10 +252,13 @@ class QuyCongTyChotNgay(Base):
 
     ngay_chot = Column(Date)
 
-    so_du = Column(DECIMAL(18, 2))
+    tien_mat = Column(DECIMAL(18,2))
+
+    tien_ngan_hang = Column(DECIMAL(18,2))
+
+    tong_quy = Column(DECIMAL(18,2))
 
     ngay_tao = Column(DateTime)
-
 
 # ==============================
 # TỒN KHO CHỐT NGÀY
