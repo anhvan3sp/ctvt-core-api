@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from datetime import datetime
+from sqlalchemy import func
+from datetime import datetime, date
 
 from app.database import get_db
-from app.models import ThuChi
+from app.models import ThuChi, QuyNhanVienChotNgay
 from app.auth_utils import get_current_user
 from app.schemas import ThuChiCreate
 
@@ -26,9 +27,9 @@ CHI_TYPES = [
 ]
 
 
-# =====================================
+# ====================================================
 # CREATE THU CHI
-# =====================================
+# ====================================================
 
 @router.post("/create")
 def create_thu_chi_nv(
@@ -37,20 +38,14 @@ def create_thu_chi_nv(
     user = Depends(get_current_user)
 ):
 
-    loai = data.loai
-    loai_giao_dich = data.loai_giao_dich
-    so_tien = data.so_tien
-    hinh_thuc = data.hinh_thuc
-
-    if loai == "thu" and loai_giao_dich not in THU_TYPES:
+    if data.loai == "thu" and data.loai_giao_dich not in THU_TYPES:
         raise HTTPException(400, "loai_giao_dich không hợp lệ")
 
-    if loai == "chi" and loai_giao_dich not in CHI_TYPES:
+    if data.loai == "chi" and data.loai_giao_dich not in CHI_TYPES:
         raise HTTPException(400, "loai_giao_dich không hợp lệ")
 
-    doi_tuong = "nhan_vien" if hinh_thuc == "tien_mat" else "cong_ty"
+    doi_tuong = "nhan_vien" if data.hinh_thuc == "tien_mat" else "cong_ty"
 
-    # lấy số dư gần nhất
     last = (
         db.query(ThuChi)
         .filter(ThuChi.ma_nv == user.ma_nv)
@@ -60,81 +55,88 @@ def create_thu_chi_nv(
 
     so_du_hien_tai = last.so_du_sau if last else 0
 
-    if loai == "thu":
-        so_du_moi = so_du_hien_tai + so_tien
+    if data.loai == "thu":
+        so_du_moi = so_du_hien_tai + data.so_tien
     else:
-        if so_du_hien_tai < so_tien:
-            raise HTTPException(400, "Không đủ tiền trong quỹ")
-        so_du_moi = so_du_hien_tai - so_tien
+
+        if so_du_hien_tai < data.so_tien:
+            raise HTTPException(400, "Không đủ tiền")
+
+        so_du_moi = so_du_hien_tai - data.so_tien
 
     thu_chi = ThuChi(
         ngay=datetime.now(),
-        doi_tuong=doi_tuong,
         ma_nv=user.ma_nv,
-        so_tien=so_tien,
-        loai=loai,
-        hinh_thuc=hinh_thuc,
-        loai_giao_dich=loai_giao_dich,
-        ngay_tao=datetime.now(),
-        so_du_sau=so_du_moi
+        doi_tuong=doi_tuong,
+        loai=data.loai,
+        loai_giao_dich=data.loai_giao_dich,
+        so_tien=data.so_tien,
+        hinh_thuc=data.hinh_thuc,
+        so_du_sau=so_du_moi,
+        ngay_tao=datetime.now()
     )
 
     db.add(thu_chi)
     db.commit()
 
     return {
-        "message": "Đã ghi thu chi",
-        "so_du_sau": so_du_moi
+        "message": "ok",
+        "so_du": so_du_moi
     }
 
 
-# =====================================
-# SO DU QUY
-# =====================================
+# ====================================================
+# DASHBOARD
+# ====================================================
 
-@router.get("/so-du")
-def get_so_du(
+@router.get("/dashboard")
+def dashboard(
     db: Session = Depends(get_db),
     user = Depends(get_current_user)
 ):
 
-    # nếu admin -> lấy quỹ công ty
-    if user.role == "admin":
+    today = date.today()
 
-        last = (
-            db.query(ThuChi)
-            .filter(ThuChi.doi_tuong == "cong_ty")
-            .order_by(ThuChi.id.desc())
-            .first()
-        )
+    # -------- QUỸ HIỆN TẠI --------
 
-        so_du = last.so_du_sau if last else 0
-
-        return {
-            "loai_quy": "quy_cong_ty",
-            "so_du": so_du
-        }
-
-    # nếu nhân viên -> lấy quỹ nhân viên
-    last = (
-        db.query(ThuChi)
-        .filter(ThuChi.ma_nv == user.ma_nv)
-        .order_by(ThuChi.id.desc())
+    last_quy = (
+        db.query(QuyNhanVienChotNgay)
+        .filter(QuyNhanVienChotNgay.ma_nv == user.ma_nv)
+        .order_by(QuyNhanVienChotNgay.id.desc())
         .first()
     )
 
-    so_du = last.so_du_sau if last else 0
+    quy_hien_tai = last_quy.so_du if last_quy else 0
+
+
+    # -------- THU HÔM NAY --------
+
+    thu = db.query(func.sum(ThuChi.so_tien)).filter(
+        ThuChi.ma_nv == user.ma_nv,
+        ThuChi.loai == "thu",
+        func.date(ThuChi.ngay) == today
+    ).scalar() or 0
+
+
+    # -------- CHI HÔM NAY --------
+
+    chi = db.query(func.sum(ThuChi.so_tien)).filter(
+        ThuChi.ma_nv == user.ma_nv,
+        ThuChi.loai == "chi",
+        func.date(ThuChi.ngay) == today
+    ).scalar() or 0
+
 
     return {
-        "loai_quy": "quy_nhan_vien",
-        "ma_nv": user.ma_nv,
-        "so_du": so_du
+        "quy_hien_tai": quy_hien_tai,
+        "thu_hom_nay": thu,
+        "chi_hom_nay": chi
     }
 
 
-# =====================================
-# LIST LICH SU
-# =====================================
+# ====================================================
+# LIST LỊCH SỬ
+# ====================================================
 
 @router.get("/list")
 def list_thu_chi(
@@ -142,24 +144,13 @@ def list_thu_chi(
     user = Depends(get_current_user)
 ):
 
-    if user.role == "admin":
-
-        data = (
-            db.query(ThuChi)
-            .order_by(ThuChi.id.desc())
-            .limit(50)
-            .all()
-        )
-
-    else:
-
-        data = (
-            db.query(ThuChi)
-            .filter(ThuChi.ma_nv == user.ma_nv)
-            .order_by(ThuChi.id.desc())
-            .limit(50)
-            .all()
-        )
+    data = (
+        db.query(ThuChi)
+        .filter(ThuChi.ma_nv == user.ma_nv)
+        .order_by(ThuChi.id.desc())
+        .limit(100)
+        .all()
+    )
 
     result = []
 
@@ -170,8 +161,7 @@ def list_thu_chi(
             "loai": i.loai,
             "loai_giao_dich": i.loai_giao_dich,
             "so_tien": i.so_tien,
-            "so_du_sau": i.so_du_sau,
-            "ma_nv": i.ma_nv
+            "so_du": i.so_du_sau
         })
 
     return result
