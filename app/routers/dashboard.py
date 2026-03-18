@@ -23,23 +23,20 @@ def dashboard(
 
     today = date.today()
 
-    # ================================
-    # SỐ BÌNH BÁN HÔM NAY
-    # ================================
-
-    ban_hom_nay = db.query(
-        func.coalesce(func.sum(NhatKyKho.so_luong), 0)
-    ).filter(
-        NhatKyKho.loai == "xuat",
-        func.date(NhatKyKho.ngay) == today
-    ).scalar()
-
-    # ===============================
-    # ADMIN → QUỸ CÔNG TY
-    # ===============================
-
+    # =====================================================
+    # ADMIN → TOÀN CÔNG TY
+    # =====================================================
     if user.ma_nv == "admin":
 
+        # -------- BÁN HÔM NAY (toàn công ty) --------
+        ban_hom_nay = db.query(
+            func.coalesce(func.sum(NhatKyKho.so_luong), 0)
+        ).filter(
+            NhatKyKho.loai == "xuat",
+            func.date(NhatKyKho.ngay) == today
+        ).scalar()
+
+        # -------- QUỸ CÔNG TY --------
         quy = (
             db.query(QuyCongTyChotNgay)
             .order_by(QuyCongTyChotNgay.ngay_chot.desc())
@@ -50,6 +47,7 @@ def dashboard(
         tien_ngan_hang = float(quy.tien_ngan_hang) if quy else 0
         tong_quy = float(quy.tong_quy) if quy else 0
 
+        # -------- THU CHI HÔM NAY --------
         thu = db.query(func.coalesce(func.sum(ThuChi.so_tien), 0)).filter(
             ThuChi.loai == "thu",
             func.date(ThuChi.ngay) == today
@@ -63,19 +61,28 @@ def dashboard(
         return {
             "loai": "cong_ty",
             "ban_hom_nay": float(ban_hom_nay),
-            "tien_mat": float(tien_mat),
-            "tien_ngan_hang": float(tien_ngan_hang),
-            "tong_quy": float(tong_quy),
+            "tien_mat": tien_mat,
+            "tien_ngan_hang": tien_ngan_hang,
+            "tong_quy": tong_quy,
             "thu_hom_nay": float(thu),
             "chi_hom_nay": float(chi)
         }
 
-    # ===============================
-    # NHÂN VIÊN → QUỸ CÁ NHÂN
-    # ===============================
-
+    # =====================================================
+    # NHÂN VIÊN → CHỈ DATA CỦA MÌNH
+    # =====================================================
     else:
 
+        # -------- BÁN HÔM NAY THEO NHÂN VIÊN --------
+        ban_hom_nay = db.query(
+            func.coalesce(func.sum(NhatKyKho.so_luong), 0)
+        ).filter(
+            NhatKyKho.loai == "xuat",
+            NhatKyKho.ma_nv == user.ma_nv,
+            func.date(NhatKyKho.ngay) == today
+        ).scalar()
+
+        # -------- QUỸ NHÂN VIÊN --------
         quy = (
             db.query(QuyNhanVienChotNgay)
             .filter(QuyNhanVienChotNgay.ma_nv == user.ma_nv)
@@ -85,6 +92,7 @@ def dashboard(
 
         so_du = float(quy.so_du) if quy else 0
 
+        # -------- THU CHI HÔM NAY --------
         thu = db.query(func.coalesce(func.sum(ThuChi.so_tien), 0)).filter(
             ThuChi.ma_nv == user.ma_nv,
             ThuChi.loai == "thu",
@@ -100,7 +108,7 @@ def dashboard(
         return {
             "loai": "nhan_vien",
             "ban_hom_nay": float(ban_hom_nay),
-            "so_du": float(so_du),
+            "so_du": so_du,
             "thu_hom_nay": float(thu),
             "chi_hom_nay": float(chi)
         }
