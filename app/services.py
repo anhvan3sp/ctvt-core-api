@@ -56,6 +56,36 @@ def get_sale_detail(db: Session, hoa_don_id: int):
 
 
 # =====================================================
+# CHI TIẾT CÔNG NỢ KHÁCH
+# =====================================================
+def get_debt_detail(db: Session, ma_kh: str):
+
+    hoa_dons = (
+        db.query(HoaDonBan)
+        .filter(HoaDonBan.ma_kh == ma_kh)
+        .filter(HoaDonBan.no_lai > 0)
+        .order_by(HoaDonBan.ngay.asc())
+        .all()
+    )
+
+    result = []
+
+    for hd in hoa_dons:
+
+        so_hd = hd.so_hd if hd.so_hd else str(hd.id)
+
+        result.append({
+            "ma_hoa_don": so_hd,
+            "ngay": hd.ngay,
+            "tong_tien": float(hd.tong_tien or 0),
+            "da_tra": float((hd.tong_tien or 0) - (hd.no_lai or 0)),
+            "con_no": float(hd.no_lai or 0)
+        })
+
+    return result
+
+
+# =====================================================
 # NHẬP HÀNG
 # =====================================================
 def create_hoa_don_nhap(db: Session, data: HoaDonNhapCreate, user: NhanVien):
@@ -114,7 +144,7 @@ def create_hoa_don_nhap(db: Session, data: HoaDonNhapCreate, user: NhanVien):
 
 
 # =====================================================
-# BÁN HÀNG (ĐÃ SỬA TỒN KHO)
+# BÁN HÀNG
 # =====================================================
 def create_hoa_don_ban(db: Session, data: HoaDonBanCreate, user: NhanVien):
 
@@ -169,7 +199,7 @@ def create_hoa_don_ban(db: Session, data: HoaDonBanCreate, user: NhanVien):
             if not sp:
                 raise HTTPException(400, f"Sản phẩm {item.ma_sp} không tồn tại")
 
-            # ===== ĐỌC TỒN TỪ SNAPSHOT =====
+            # ===== LẤY TỒN KHO SNAPSHOT =====
             sql = text("""
             SELECT so_luong
             FROM ton_kho_chot_ngay
