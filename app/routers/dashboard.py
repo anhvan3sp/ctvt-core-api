@@ -27,28 +27,16 @@ def dashboard(
     # SỐ BÌNH BÁN HÔM NAY
     # ================================
 
-    if user.ma_nv == "admin":
+    ban_hom_nay = db.query(
+        func.coalesce(func.sum(NhatKyKho.so_luong), 0)
+    ).filter(
+        NhatKyKho.loai == "xuat",
+        func.date(NhatKyKho.ngay) == today
+    ).scalar()
 
-        ban_hom_nay = db.query(
-            func.coalesce(func.sum(NhatKyKho.so_luong), 0)
-        ).filter(
-            NhatKyKho.loai == "xuat",
-            func.date(NhatKyKho.ngay) == today
-        ).scalar()
-
-    else:
-
-        ban_hom_nay = db.query(
-            func.coalesce(func.sum(NhatKyKho.so_luong), 0)
-        ).filter(
-            NhatKyKho.ma_nv == user.ma_nv,
-            NhatKyKho.loai == "xuat",
-            func.date(NhatKyKho.ngay) == today
-        ).scalar()
-
-    # =================================
+    # ===============================
     # ADMIN → QUỸ CÔNG TY
-    # =================================
+    # ===============================
 
     if user.ma_nv == "admin":
 
@@ -62,16 +50,12 @@ def dashboard(
         tien_ngan_hang = float(quy.tien_ngan_hang) if quy else 0
         tong_quy = float(quy.tong_quy) if quy else 0
 
-        thu = db.query(
-            func.coalesce(func.sum(ThuChi.so_tien), 0)
-        ).filter(
+        thu = db.query(func.coalesce(func.sum(ThuChi.so_tien), 0)).filter(
             ThuChi.loai == "thu",
             func.date(ThuChi.ngay) == today
         ).scalar()
 
-        chi = db.query(
-            func.coalesce(func.sum(ThuChi.so_tien), 0)
-        ).filter(
+        chi = db.query(func.coalesce(func.sum(ThuChi.so_tien), 0)).filter(
             ThuChi.loai == "chi",
             func.date(ThuChi.ngay) == today
         ).scalar()
@@ -86,9 +70,9 @@ def dashboard(
             "chi_hom_nay": float(chi)
         }
 
-    # =================================
+    # ===============================
     # NHÂN VIÊN → QUỸ CÁ NHÂN
-    # =================================
+    # ===============================
 
     else:
 
@@ -101,17 +85,13 @@ def dashboard(
 
         so_du = float(quy.so_du) if quy else 0
 
-        thu = db.query(
-            func.coalesce(func.sum(ThuChi.so_tien), 0)
-        ).filter(
+        thu = db.query(func.coalesce(func.sum(ThuChi.so_tien), 0)).filter(
             ThuChi.ma_nv == user.ma_nv,
             ThuChi.loai == "thu",
             func.date(ThuChi.ngay) == today
         ).scalar()
 
-        chi = db.query(
-            func.coalesce(func.sum(ThuChi.so_tien), 0)
-        ).filter(
+        chi = db.query(func.coalesce(func.sum(ThuChi.so_tien), 0)).filter(
             ThuChi.ma_nv == user.ma_nv,
             ThuChi.loai == "chi",
             func.date(ThuChi.ngay) == today
