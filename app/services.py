@@ -199,7 +199,7 @@ def create_hoa_don_ban(db: Session, data: HoaDonBanCreate, user: NhanVien):
             if not sp:
                 raise HTTPException(400, f"Sản phẩm {item.ma_sp} không tồn tại")
 
-            # ===== LẤY TỒN KHO SNAPSHOT =====
+            # kiểm tra tồn kho snapshot
             sql = text("""
             SELECT so_luong
             FROM ton_kho_chot_ngay
@@ -240,12 +240,13 @@ def create_hoa_don_ban(db: Session, data: HoaDonBanCreate, user: NhanVien):
                 so_luong=item.so_luong,
                 loai="xuat",
                 bang_tham_chieu="hoa_don_ban",
-                id_tham_chieu=hoa_don.id
+                id_tham_chieu=hoa_don.id,
+                ma_nv=user.ma_nv   # 👈 QUAN TRỌNG
             ))
 
-        # ===== TIỀN =====
-        tien_mat = Decimal(str(data.tien_mat))
-        tien_ck = Decimal(str(data.tien_ck))
+        # ===== TÍNH TIỀN =====
+        tien_mat = Decimal(str(data.tien_mat or 0))
+        tien_ck = Decimal(str(data.tien_ck or 0))
 
         tong_da_tra = tien_mat + tien_ck
         no_moi = tong_tien - tong_da_tra
@@ -254,29 +255,49 @@ def create_hoa_don_ban(db: Session, data: HoaDonBanCreate, user: NhanVien):
         hoa_don.tong_thanh_toan = tong_da_tra
         hoa_don.no_lai = no_moi
 
-        # ===== THU TIỀN =====
+        # =========================
+        # THU TIỀN MẶT (NV)
+        # =========================
         if tien_mat > 0:
+
+            last = (
+                db.query(ThuChi)
+                .filter(ThuChi.ma_nv == user.ma_nv)
+                .order_by(ThuChi.id.desc())
+                .first()
+            )
+
+            so_du_hien_tai = float(last.so_du_sau) if last else 0
+            so_du_moi = so_du_hien_tai + float(tien_mat)
 
             db.add(ThuChi(
                 ngay=datetime.utcnow(),
-                doi_tuong="nhan_vien" if user.vai_tro == "nv_dac_biet" else "cong_ty",
                 ma_nv=user.ma_nv,
-                so_tien=tien_mat,
+                doi_tuong="nhan_vien",
                 loai="thu",
+                loai_giao_dich="ban_hang",
+                so_tien=float(tien_mat),
                 hinh_thuc="tien_mat",
+                so_du_sau=so_du_moi,
+                ngay_tao=datetime.utcnow(),
                 noi_dung=f"Thu tiền mặt HĐ {so_hd}"
             ))
 
+        # =========================
+        # THU CHUYỂN KHOẢN (CÔNG TY)
+        # =========================
         if tien_ck > 0:
 
             db.add(ThuChi(
                 ngay=datetime.utcnow(),
-                doi_tuong="cong_ty",
                 ma_nv=user.ma_nv,
-                so_tien=tien_ck,
+                doi_tuong="cong_ty",
                 loai="thu",
+                loai_giao_dich="ban_hang",
+                so_tien=float(tien_ck),
                 hinh_thuc="chuyen_khoan",
-                noi_dung=f"Thu chuyển khoản HĐ {so_hd}"
+                ngay_tao=datetime.utcnow(),
+                noi_dung=f"Thu CK HĐ {so_hd}"
             ))
 
         db.commit()
