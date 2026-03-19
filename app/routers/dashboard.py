@@ -42,12 +42,8 @@ def dashboard(
             NhatKyKho.ngay < end
         ).scalar()
 
-        # -------- QUỸ CÔNG TY --------
-        quy = (
-            db.query(QuyCongTyChotNgay)
-            .order_by(QuyCongTyChotNgay.ngay_chot.desc())
-            .first()
-        )
+        # -------- QUỸ CÔNG TY (FIX) --------
+        quy = db.query(QuyCongTyChotNgay).first()
 
         tien_mat = float(quy.tien_mat) if quy else 0
         tien_ngan_hang = float(quy.tien_ngan_hang) if quy else 0
@@ -95,13 +91,10 @@ def dashboard(
             NhatKyKho.ngay < end
         ).scalar()
 
-        # -------- QUỸ NHÂN VIÊN --------
-        quy = (
-            db.query(QuyNhanVienChotNgay)
-            .filter(QuyNhanVienChotNgay.ma_nv == user.ma_nv)
-            .order_by(QuyNhanVienChotNgay.ngay_chot.desc())
-            .first()
-        )
+        # -------- QUỸ NHÂN VIÊN (FIX) --------
+        quy = db.query(QuyNhanVienChotNgay).filter(
+            QuyNhanVienChotNgay.ma_nv == user.ma_nv
+        ).first()
 
         so_du = float(quy.so_du) if quy else 0
 
