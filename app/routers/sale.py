@@ -4,9 +4,16 @@ from sqlalchemy import func, text
 
 from app.database import get_db
 from app.schemas import HoaDonBanCreate
-from app.services import create_hoa_don_ban, get_sale_detail
 from app.auth_utils import require_roles
-from app.models import HoaDonBan
+from app.models import (
+    HoaDonBan,
+    TonKhoChotNgay,
+    NhatKyKho,
+    QuyNhanVienChotNgay,
+    QuyCongTyChotNgay,
+    ThuChi,
+    KhachHang
+)
 
 router = APIRouter(prefix="/sale", tags=["Sale"])
 
@@ -18,49 +25,127 @@ def create_sale(
     user = Depends(require_roles(["admin", "nv_dac_biet"]))
 ):
 
-    # kiểm tra quyền kho
+    # =========================
+    # CHECK QUYỀN KHO
+    # =========================
     if user.vai_tro != "admin":
-
-        sql = text("""
-        SELECT 1
-        FROM nhan_vien_kho
-        WHERE ma_nv = :ma_nv
-        AND ma_kho = :ma_kho
-        """)
-
-        row = db.execute(
-            sql,
-            {"ma_nv": user.ma_nv, "ma_kho": data.ma_kho}
-        ).fetchone()
+        row = db.execute(text("""
+            SELECT 1 FROM nhan_vien_kho
+            WHERE ma_nv = :ma_nv AND ma_kho = :ma_kho
+        """), {
+            "ma_nv": user.ma_nv,
+            "ma_kho": data.ma_kho
+        }).fetchone()
 
         if not row:
-            raise HTTPException(
-                status_code=403,
-                detail="Nhan vien khong duoc phep su dung kho nay"
-            )
+            raise HTTPException(403, "Khong duoc phep dung kho")
 
-    # kiểm tra hóa đơn trùng trong ngày
-    duplicate = db.query(HoaDonBan).filter(
-        HoaDonBan.ma_nv == user.ma_nv,
-        HoaDonBan.ma_kh == data.ma_kh,
-        HoaDonBan.ma_kho == data.ma_kho,
-        func.date(HoaDonBan.ngay) == func.current_date()
-    ).first()
-
-    if duplicate and not getattr(data, "force_create", False):
-        return {
-            "warning": True,
-            "message": "Hoa don ban nay co ve da tao trong ngay. Ban co muon tao tiep khong?"
-        }
     with db.begin():
-        return create_hoa_don_ban(db, data, user)
-   
 
+        # =========================
+        # LOCK QUỸ
+        # =========================
+        quy_nv = db.query(QuyNhanVienChotNgay)\
+            .filter_by(ma_nv=user.ma_nv)\
+            .with_for_update()\
+            .first()
 
-@router.get("/detail/{id}")
-def sale_detail(
-    id: int,
-    db: Session = Depends(get_db),
-    user = Depends(require_roles(["admin", "nv_dac_biet", "ke_toan"]))
-):
-    return get_sale_detail(db, id)
+        quy_ct = db.query(QuyCongTyChotNgay)\
+            .with_for_update()\
+            .first()
+
+        # =========================
+        # LOCK KHÁCH
+        # =========================
+        kh = db.query(KhachHang)\
+            .filter_by(ma_kh=data.ma_kh)\
+            .with_for_update()\
+            .first()
+
+        if not quy_nv or not quy_ct or not kh:
+            raise HTTPException(400, "Thiếu dữ liệu")
+
+        tong_tien = 0
+
+        # =========================
+        # XỬ LÝ KHO
+        # =========================
+        for item in data.items:
+
+            ton = db.query(TonKhoChotNgay)\
+                .filter_by(ma_kho=data.ma_kho, ma_sp=item.ma_sp)\
+                .with_for_update()\
+                .first()
+
+            if not ton or ton.so_luong < item.so_luong:
+                raise HTTPException(400, "Không đủ hàng")
+
+            ton.so_luong -= item.so_luong
+
+            db.add(NhatKyKho(
+                ma_kho=data.ma_kho,
+                ma_sp=item.ma_sp,
+                loai="xuat",
+                so_luong=item.so_luong,
+                ma_nv=user.ma_nv
+            ))
+
+            tong_tien += item.so_luong * item.don_gia
+
+        tien_mat = data.tien_mat or 0
+        tien_ck = data.tien_ck or 0
+
+        if tien_mat + tien_ck > tong_tien:
+            raise HTTPException(400, "Tiền lớn hơn tổng tiền")
+
+        # =========================
+        # TIỀN MẶT → NV
+        # =========================
+        quy_nv.so_du += tien_mat
+
+        # =========================
+        # CK → CÔNG TY
+        # =========================
+        quy_ct.tien_ngan_hang += tien_ck
+
+        # =========================
+        # TÍNH CÔNG NỢ
+        # =========================
+        no_moi = tong_tien - tien_mat - tien_ck
+
+        if no_moi > 0:
+            kh.cong_no = (kh.cong_no or 0) + no_moi
+
+        # =========================
+        # UPDATE TỔNG QUỸ
+        # =========================
+        quy_ct.tong_quy = quy_ct.tien_mat + quy_ct.tien_ngan_hang
+
+        # =========================
+        # LOG TIỀN
+        # =========================
+        db.add(ThuChi(
+            ma_nv=user.ma_nv,
+            loai="thu",
+            loai_giao_dich="ban_hang",
+            so_tien=tong_tien,
+            hinh_thuc="tong_hop",
+            so_du_sau=quy_nv.so_du,
+            so_du_ct_sau=quy_ct.tong_quy
+        ))
+
+        # =========================
+        # TẠO HÓA ĐƠN
+        # =========================
+        db.add(HoaDonBan(
+            ma_nv=user.ma_nv,
+            ma_kh=data.ma_kh,
+            ma_kho=data.ma_kho,
+            tong_tien=tong_tien
+        ))
+
+    return {
+        "message": "OK",
+        "tong_tien": tong_tien,
+        "no_moi": no_moi
+    }
