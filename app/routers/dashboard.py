@@ -4,7 +4,7 @@ from sqlalchemy import func
 from datetime import datetime, timedelta
 
 from app.database import get_db
-from app.models import ThuChi, NhatKyKho
+from app.models import NhatKyKho, QuyCongTyChotNgay, QuyNhanVienChotNgay
 from app.auth_utils import get_current_user
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
@@ -16,19 +16,16 @@ def dashboard(
     user = Depends(get_current_user)
 ):
 
-    # ================================
-    # TIMEZONE VIỆT NAM
-    # ================================
+    # TIME VN
     now = datetime.utcnow() + timedelta(hours=7)
     start = datetime(now.year, now.month, now.day)
     end = start + timedelta(days=1)
 
-    # =====================================================
-    # ADMIN → TOÀN CÔNG TY
-    # =====================================================
+    # =========================
+    # ADMIN
+    # =========================
     if user.ma_nv == "admin":
 
-        # -------- BÁN HÔM NAY --------
         ban_hom_nay = db.query(
             func.coalesce(func.sum(NhatKyKho.so_luong), 0)
         ).filter(
@@ -37,51 +34,28 @@ def dashboard(
             NhatKyKho.ngay < end
         ).scalar() or 0
 
-        # =====================================================
-        # QUỸ CÔNG TY (LẤY SỐ DƯ CUỐI - CHUẨN ERP)
-        # =====================================================
-        last = db.query(ThuChi).order_by(ThuChi.id.desc()).first()
+        # 👉 LẤY QUỸ CÔNG TY (1 dòng)
+        quy = db.query(QuyCongTyChotNgay).first()
 
-        tong_quy = float(last.so_du_ct_sau) if last and last.so_du_ct_sau else 0
-
-        # 👉 đơn giản hóa (chưa tách tiền mặt / ngân hàng)
-        tien_mat = tong_quy
-        tien_ngan_hang = 0
-
-        # -------- THU HÔM NAY --------
-        thu = db.query(
-            func.coalesce(func.sum(ThuChi.so_tien), 0)
-        ).filter(
-            ThuChi.loai == "thu",
-            ThuChi.ngay >= start,
-            ThuChi.ngay < end
-        ).scalar() or 0
-
-        # -------- CHI HÔM NAY --------
-        chi = db.query(
-            func.coalesce(func.sum(ThuChi.so_tien), 0)
-        ).filter(
-            ThuChi.loai == "chi",
-            ThuChi.ngay >= start,
-            ThuChi.ngay < end
-        ).scalar() or 0
+        tien_mat = float(quy.tien_mat) if quy else 0
+        tien_ngan_hang = float(quy.tien_ngan_hang) if quy else 0
+        tong_quy = float(quy.tong_quy) if quy else 0
 
         return {
             "loai": "cong_ty",
             "ban_hom_nay": float(ban_hom_nay),
-            "tien_mat": float(tien_mat),
-            "tien_ngan_hang": float(tien_ngan_hang),
-            "tong_quy": float(tong_quy),
-            "thu_hom_nay": float(thu),
-            "chi_hom_nay": float(chi)
+            "tien_mat": tien_mat,
+            "tien_ngan_hang": tien_ngan_hang,
+            "tong_quy": tong_quy,
+            "thu_hom_nay": 0,
+            "chi_hom_nay": 0
         }
 
-    # =====================================================
+    # =========================
     # NHÂN VIÊN
-    # =====================================================
+    # =========================
     else:
 
-        # -------- BÁN HÔM NAY --------
         ban_hom_nay = db.query(
             func.coalesce(func.sum(NhatKyKho.so_luong), 0)
         ).filter(
@@ -91,39 +65,16 @@ def dashboard(
             NhatKyKho.ngay < end
         ).scalar() or 0
 
-        # =====================================================
-        # SỐ DƯ NHÂN VIÊN (LẤY DÒNG CUỐI)
-        # =====================================================
-        last = db.query(ThuChi).filter(
-            ThuChi.ma_nv == user.ma_nv
-        ).order_by(ThuChi.id.desc()).first()
+        quy = db.query(QuyNhanVienChotNgay).filter(
+            QuyNhanVienChotNgay.ma_nv == user.ma_nv
+        ).first()
 
-        so_du = float(last.so_du_sau) if last and last.so_du_sau else 0
-
-        # -------- THU --------
-        thu = db.query(
-            func.coalesce(func.sum(ThuChi.so_tien), 0)
-        ).filter(
-            ThuChi.ma_nv == user.ma_nv,
-            ThuChi.loai == "thu",
-            ThuChi.ngay >= start,
-            ThuChi.ngay < end
-        ).scalar() or 0
-
-        # -------- CHI --------
-        chi = db.query(
-            func.coalesce(func.sum(ThuChi.so_tien), 0)
-        ).filter(
-            ThuChi.ma_nv == user.ma_nv,
-            ThuChi.loai == "chi",
-            ThuChi.ngay >= start,
-            ThuChi.ngay < end
-        ).scalar() or 0
+        so_du = float(quy.so_du) if quy else 0
 
         return {
             "loai": "nhan_vien",
             "ban_hom_nay": float(ban_hom_nay),
-            "so_du": float(so_du),
-            "thu_hom_nay": float(thu),
-            "chi_hom_nay": float(chi)
+            "so_du": so_du,
+            "thu_hom_nay": 0,
+            "chi_hom_nay": 0
         }
