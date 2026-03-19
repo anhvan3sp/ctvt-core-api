@@ -1,30 +1,25 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import func
-from decimal import Decimal
 
 from app.database import get_db
-from app.models import NhatKyKho
+from app.models import TonKhoChotNgay
 
-router = APIRouter(prefix="/stock", tags=["Stock"])
+router = APIRouter(prefix="/stock", tags=["stock"])
+
 
 @router.get("/{ma_kho}/{ma_sp}")
 def get_stock(ma_kho: str, ma_sp: str, db: Session = Depends(get_db)):
 
-    tong_nhap = db.query(func.coalesce(func.sum(NhatKyKho.so_luong), 0)).filter(
-        NhatKyKho.ma_sp == ma_sp,
-        NhatKyKho.ma_kho == ma_kho,
-        NhatKyKho.loai == "nhap"
-    ).scalar()
+    ton = db.query(TonKhoChotNgay).filter(
+        TonKhoChotNgay.ma_kho == ma_kho,
+        TonKhoChotNgay.ma_sp == ma_sp
+    ).first()
 
-    tong_xuat = db.query(func.coalesce(func.sum(NhatKyKho.so_luong), 0)).filter(
-        NhatKyKho.ma_sp == ma_sp,
-        NhatKyKho.ma_kho == ma_kho,
-        NhatKyKho.loai == "xuat"
-    ).scalar()
+    if not ton:
+        raise HTTPException(404, "Không có tồn kho")
 
     return {
         "ma_kho": ma_kho,
         "ma_sp": ma_sp,
-        "ton_kho": Decimal(str(tong_nhap)) - Decimal(str(tong_xuat))
+        "ton_kho": float(ton.so_luong or 0)
     }
