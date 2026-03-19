@@ -66,7 +66,9 @@ def create_purchase(
         }
 
     # ---- tạo hóa đơn ----
-    return create_hoa_don_nhap(db, data, user)
+    with db.begin():
+        return create_hoa_don_ban(db, data, user)
+    
 
 
 @router.get("/", response_model=List[HoaDonNhapResponse])
