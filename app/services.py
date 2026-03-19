@@ -146,13 +146,15 @@ def create_hoa_don_nhap(db: Session, data: HoaDonNhapCreate, user: NhanVien):
 # =====================================================
 # BÁN HÀNG
 # =====================================================
+
+
 def create_hoa_don_ban(db: Session, data: HoaDonBanCreate, user: NhanVien):
 
-    try:
+    with db.begin():
 
         tong_tien = Decimal("0")
 
-        # ===== KIỂM TRA KHÁCH =====
+        # ===== CHECK KH =====
         kh = db.query(KhachHang).filter(
             KhachHang.ma_kh == data.ma_kh
         ).first()
@@ -160,13 +162,12 @@ def create_hoa_don_ban(db: Session, data: HoaDonBanCreate, user: NhanVien):
         if not kh:
             raise HTTPException(400, "Khách hàng không tồn tại")
 
-        # ===== TẠO SỐ HÓA ĐƠN =====
+        # ===== TẠO SỐ HĐ =====
         last_hd = db.query(HoaDonBan).order_by(
             HoaDonBan.id.desc()
         ).first()
 
         so_moi = 1
-
         if last_hd and last_hd.so_hd:
             try:
                 so_moi = int(last_hd.so_hd.replace("HD", "")) + 1
@@ -189,27 +190,19 @@ def create_hoa_don_ban(db: Session, data: HoaDonBanCreate, user: NhanVien):
         db.add(hoa_don)
         db.flush()
 
-        # ===== XỬ LÝ SẢN PHẨM =====
+        # =========================
+        # XỬ LÝ SẢN PHẨM (LOCK KHO)
+        # =========================
         for item in data.items:
 
-            sp = db.query(SanPham).filter(
-                SanPham.ma_sp == item.ma_sp
-            ).first()
-
-            if not sp:
-                raise HTTPException(400, f"Sản phẩm {item.ma_sp} không tồn tại")
-
-            # kiểm tra tồn kho snapshot
-            sql = text("""
-            SELECT so_luong
-            FROM ton_kho_chot_ngay
-            WHERE ma_kho = :ma_kho
-            AND ma_sp = :ma_sp
-            ORDER BY ngay DESC
-            LIMIT 1
-            """)
-
-            row = db.execute(sql, {
+            # LOCK tồn kho
+            row = db.execute(text("""
+                SELECT so_luong
+                FROM ton_kho_chot_ngay
+                WHERE ma_kho = :ma_kho
+                AND ma_sp = :ma_sp
+                FOR UPDATE
+            """), {
                 "ma_kho": data.ma_kho,
                 "ma_sp": item.ma_sp
             }).fetchone()
@@ -217,10 +210,19 @@ def create_hoa_don_ban(db: Session, data: HoaDonBanCreate, user: NhanVien):
             ton = Decimal(str(row[0])) if row else Decimal("0")
 
             if ton < Decimal(str(item.so_luong)):
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Tồn kho không đủ cho {item.ma_sp}"
-                )
+                raise HTTPException(400, f"Tồn kho không đủ {item.ma_sp}")
+
+            # TRỪ KHO NGAY (balance realtime)
+            db.execute(text("""
+                UPDATE ton_kho_chot_ngay
+                SET so_luong = so_luong - :sl
+                WHERE ma_kho = :ma_kho
+                AND ma_sp = :ma_sp
+            """), {
+                "sl": item.so_luong,
+                "ma_kho": data.ma_kho,
+                "ma_sp": item.ma_sp
+            })
 
             thanh_tien = Decimal(str(item.so_luong)) * Decimal(str(item.don_gia))
             tong_tien += thanh_tien
@@ -233,6 +235,7 @@ def create_hoa_don_ban(db: Session, data: HoaDonBanCreate, user: NhanVien):
                 thanh_tien=thanh_tien
             ))
 
+            # ledger kho
             db.add(NhatKyKho(
                 ngay=datetime.utcnow(),
                 ma_sp=item.ma_sp,
@@ -241,13 +244,14 @@ def create_hoa_don_ban(db: Session, data: HoaDonBanCreate, user: NhanVien):
                 loai="xuat",
                 bang_tham_chieu="hoa_don_ban",
                 id_tham_chieu=hoa_don.id,
-                ma_nv=user.ma_nv   # 👈 QUAN TRỌNG
+                ma_nv=user.ma_nv
             ))
 
-        # ===== TÍNH TIỀN =====
+        # =========================
+        # TÍNH TIỀN
+        # =========================
         tien_mat = Decimal(str(data.tien_mat or 0))
         tien_ck = Decimal(str(data.tien_ck or 0))
-
         tong_da_tra = tien_mat + tien_ck
         no_moi = tong_tien - tong_da_tra
 
@@ -256,55 +260,71 @@ def create_hoa_don_ban(db: Session, data: HoaDonBanCreate, user: NhanVien):
         hoa_don.no_lai = no_moi
 
         # =========================
-        # THU TIỀN MẶT (NV)
+        # THU TIỀN MẶT (NV) - LOCK
         # =========================
         if tien_mat > 0:
 
-            last = (
-                db.query(ThuChi)
-                .filter(ThuChi.ma_nv == user.ma_nv)
-                .order_by(ThuChi.id.desc())
-                .first()
-            )
+            row = db.execute(text("""
+                SELECT so_du_sau
+                FROM thu_chi
+                WHERE doi_tuong = 'nhan_vien'
+                AND ma_nv = :ma_nv
+                ORDER BY id DESC
+                LIMIT 1
+                FOR UPDATE
+            """), {"ma_nv": user.ma_nv}).fetchone()
 
-            so_du_hien_tai = float(last.so_du_sau) if last else 0
-            so_du_moi = so_du_hien_tai + float(tien_mat)
+            so_du = float(row[0]) if row else 0
+            so_du_moi = so_du + float(tien_mat)
 
-            db.add(ThuChi(
-                ngay=datetime.utcnow(),
-                ma_nv=user.ma_nv,
-                doi_tuong="nhan_vien",
-                loai="thu",
-                loai_giao_dich="ban_hang",
-                so_tien=float(tien_mat),
-                hinh_thuc="tien_mat",
-                so_du_sau=so_du_moi,
-                ngay_tao=datetime.utcnow(),
-                noi_dung=f"Thu tiền mặt HĐ {so_hd}"
-            ))
+            db.execute(text("""
+                INSERT INTO thu_chi (
+                    ngay, doi_tuong, ma_nv,
+                    so_tien, loai, hinh_thuc,
+                    loai_giao_dich, so_du_sau
+                )
+                VALUES (
+                    NOW(), 'nhan_vien', :ma_nv,
+                    :tien, 'thu', 'tien_mat',
+                    'ban_hang', :so_du
+                )
+            """), {
+                "ma_nv": user.ma_nv,
+                "tien": float(tien_mat),
+                "so_du": so_du_moi
+            })
 
         # =========================
-        # THU CHUYỂN KHOẢN (CÔNG TY)
+        # THU CK (CÔNG TY) - LOCK
         # =========================
         if tien_ck > 0:
 
-            db.add(ThuChi(
-                ngay=datetime.utcnow(),
-                ma_nv=user.ma_nv,
-                doi_tuong="cong_ty",
-                loai="thu",
-                loai_giao_dich="ban_hang",
-                so_tien=float(tien_ck),
-                hinh_thuc="chuyen_khoan",
-                ngay_tao=datetime.utcnow(),
-                noi_dung=f"Thu CK HĐ {so_hd}"
-            ))
+            row = db.execute(text("""
+                SELECT so_du_ct_sau
+                FROM thu_chi
+                WHERE doi_tuong = 'cong_ty'
+                ORDER BY id DESC
+                LIMIT 1
+                FOR UPDATE
+            """)).fetchone()
 
-        db.commit()
-        db.refresh(hoa_don)
+            so_du_ct = float(row[0]) if row else 0
+            so_du_ct_moi = so_du_ct + float(tien_ck)
+
+            db.execute(text("""
+                INSERT INTO thu_chi (
+                    ngay, doi_tuong,
+                    so_tien, loai, hinh_thuc,
+                    loai_giao_dich, so_du_ct_sau
+                )
+                VALUES (
+                    NOW(), 'cong_ty',
+                    :tien, 'thu', 'chuyen_khoan',
+                    'ban_hang', :so_du
+                )
+            """), {
+                "tien": float(tien_ck),
+                "so_du": so_du_ct_moi
+            })
 
         return hoa_don
-
-    except Exception as e:
-        db.rollback()
-        raise e
