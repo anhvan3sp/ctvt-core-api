@@ -1,9 +1,8 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from sqlalchemy import func
 
 from app.database import get_db
-from app.models import NhatKyKho, SanPham
+from app.models import TonKhoChotNgay, SanPham
 from app.auth_utils import require_roles
 
 router = APIRouter(prefix="/inventory", tags=["inventory"])
@@ -18,19 +17,18 @@ def inventory(
     data = (
         db.query(
             SanPham.ten_sp,
-            func.sum(NhatKyKho.so_luong).label("ton")
+            TonKhoChotNgay.so_luong
         )
-        .join(SanPham, SanPham.ma_sp == NhatKyKho.ma_sp)
-        .group_by(SanPham.ten_sp)
+        .join(SanPham, SanPham.ma_sp == TonKhoChotNgay.ma_sp)
         .all()
     )
 
     result = []
 
-    for ten_sp, ton in data:
+    for ten_sp, so_luong in data:
         result.append({
             "ten_sp": ten_sp,
-            "ton": float(ton or 0)
+            "ton": float(so_luong or 0)
         })
 
     return result
