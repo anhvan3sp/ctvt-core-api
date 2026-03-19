@@ -52,8 +52,9 @@ def create_sale(
             "warning": True,
             "message": "Hoa don ban nay co ve da tao trong ngay. Ban co muon tao tiep khong?"
         }
-
-    return create_hoa_don_ban(db, data, user)
+    with db.begin():
+        return create_hoa_don_ban(db, data, user)
+   
 
 
 @router.get("/detail/{id}")
