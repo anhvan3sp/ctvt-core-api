@@ -140,13 +140,18 @@ class HoaDonNhapItemCreate(BaseModel):
 
 
 class HoaDonNhapCreate(BaseModel):
-    ngay: date
     ma_ncc: str
     ma_kho: str
+
     tien_mat: Decimal = Decimal("0")
     tien_ck: Decimal = Decimal("0")
+
     items: List[HoaDonNhapItemCreate]
-    tong_tien: float
+
+    # ❌ bỏ các field này:
+    # ngay
+    # tong_tien
+
     force_create: bool = False
 
 class HoaDonNhapResponse(BaseModel):
