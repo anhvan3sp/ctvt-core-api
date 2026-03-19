@@ -23,13 +23,10 @@ CHI_TYPES = [
     "sua_xe",
     "dang_kiem",
     "tien_doi",
+    "nop_tien",   # 👈 thêm
     "chi_khac"
 ]
 
-
-# ====================================================
-# CREATE THU CHI
-# ====================================================
 
 @router.post("/create")
 def create_thu_chi_nv(
@@ -38,14 +35,14 @@ def create_thu_chi_nv(
     user = Depends(get_current_user)
 ):
 
-    # kiểm tra loại giao dịch
+    # validate
     if data.loai == "thu" and data.loai_giao_dich not in THU_TYPES:
         raise HTTPException(400, "loai_giao_dich không hợp lệ")
 
     if data.loai == "chi" and data.loai_giao_dich not in CHI_TYPES:
         raise HTTPException(400, "loai_giao_dich không hợp lệ")
 
-    # lấy số dư cuối cùng của nhân viên
+    # lấy số dư
     last = (
         db.query(ThuChi)
         .filter(ThuChi.ma_nv == user.ma_nv)
@@ -55,15 +52,63 @@ def create_thu_chi_nv(
 
     so_du_hien_tai = float(last.so_du_sau) if last else 0
 
-    # tính số dư mới
-    if data.loai == "thu":
-        so_du_moi = so_du_hien_tai + data.so_tien
-
-    else:
+    # ==============================
+    # CASE: NỘP TIỀN
+    # ==============================
+    if data.loai == "chi" and data.loai_giao_dich == "nop_tien":
 
         if so_du_hien_tai < data.so_tien:
             raise HTTPException(400, "Không đủ tiền")
 
+        so_du_moi = so_du_hien_tai - data.so_tien
+
+        # 1. TRỪ QUỸ NHÂN VIÊN
+        chi_nv = ThuChi(
+            ngay=datetime.now(),
+            ma_nv=user.ma_nv,
+            doi_tuong="nhan_vien",
+            loai="chi",
+            loai_giao_dich="nop_tien",
+            so_tien=data.so_tien,
+            hinh_thuc=data.hinh_thuc,
+            so_du_sau=so_du_moi,
+            ngay_tao=datetime.now(),
+            noi_dung="Nộp tiền về công ty"
+        )
+
+        db.add(chi_nv)
+
+        # 2. CỘNG QUỸ CÔNG TY
+        thu_ct = ThuChi(
+            ngay=datetime.now(),
+            ma_nv=user.ma_nv,
+            doi_tuong="cong_ty",
+            loai="thu",
+            loai_giao_dich="nop_tien",
+            so_tien=data.so_tien,
+            hinh_thuc=data.hinh_thuc,
+            ngay_tao=datetime.now(),
+            noi_dung=f"{user.ma_nv} nộp tiền về công ty"
+        )
+
+        db.add(thu_ct)
+
+        db.commit()
+
+        return {
+            "message": "Nộp tiền thành công",
+            "so_du": so_du_moi
+        }
+
+    # ==============================
+    # CASE BÌNH THƯỜNG
+    # ==============================
+
+    if data.loai == "thu":
+        so_du_moi = so_du_hien_tai + data.so_tien
+    else:
+        if so_du_hien_tai < data.so_tien:
+            raise HTTPException(400, "Không đủ tiền")
         so_du_moi = so_du_hien_tai - data.so_tien
 
     thu_chi = ThuChi(
@@ -84,89 +129,4 @@ def create_thu_chi_nv(
     return {
         "message": "ok",
         "so_du": so_du_moi
-    }
-
-
-# ====================================================
-# DASHBOARD
-# ====================================================
-
-@router.get("/dashboard")
-def dashboard(
-    db: Session = Depends(get_db),
-    user = Depends(get_current_user)
-):
-
-    today = date.today()
-
-    start = datetime.combine(today, datetime.min.time())
-    end = start + timedelta(days=1)
-
-    # ===============================
-    # ADMIN → QUỸ CÔNG TY
-    # ===============================
-
-    if user.ma_nv == "admin":
-
-        last_quy = (
-            db.query(QuyCongTyChotNgay)
-            .order_by(QuyCongTyChotNgay.ngay_chot.desc())
-            .first()
-        )
-
-        quy_hien_tai = float(last_quy.tong_quy) if last_quy else 0
-
-        thu = db.query(
-            func.coalesce(func.sum(ThuChi.so_tien), 0)
-        ).filter(
-            ThuChi.loai == "thu",
-            ThuChi.ngay >= start,
-            ThuChi.ngay < end
-        ).scalar()
-
-        chi = db.query(
-            func.coalesce(func.sum(ThuChi.so_tien), 0)
-        ).filter(
-            ThuChi.loai == "chi",
-            ThuChi.ngay >= start,
-            ThuChi.ngay < end
-        ).scalar()
-
-    # ===============================
-    # NHÂN VIÊN → QUỸ CÁ NHÂN
-    # ===============================
-
-    else:
-
-        last_quy = (
-            db.query(QuyNhanVienChotNgay)
-            .filter(QuyNhanVienChotNgay.ma_nv == user.ma_nv)
-            .order_by(QuyNhanVienChotNgay.ngay_chot.desc())
-            .first()
-        )
-
-        quy_hien_tai = float(last_quy.so_du) if last_quy else 0
-
-        thu = db.query(
-            func.coalesce(func.sum(ThuChi.so_tien), 0)
-        ).filter(
-            ThuChi.ma_nv == user.ma_nv,
-            ThuChi.loai == "thu",
-            ThuChi.ngay >= start,
-            ThuChi.ngay < end
-        ).scalar()
-
-        chi = db.query(
-            func.coalesce(func.sum(ThuChi.so_tien), 0)
-        ).filter(
-            ThuChi.ma_nv == user.ma_nv,
-            ThuChi.loai == "chi",
-            ThuChi.ngay >= start,
-            ThuChi.ngay < end
-        ).scalar()
-
-    return {
-        "quy_hien_tai": float(quy_hien_tai),
-        "thu_hom_nay": float(thu),
-        "chi_hom_nay": float(chi)
     }
