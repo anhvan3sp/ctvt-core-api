@@ -88,29 +88,50 @@ def get_debt_detail(db: Session, ma_kh: str):
 # =====================================================
 # NHẬP HÀNG
 # =====================================================
+
 def create_hoa_don_nhap(db: Session, data: HoaDonNhapCreate, user: NhanVien):
 
-    try:
+    if not data.items:
+        raise HTTPException(400, "Không có sản phẩm")
+
+    with db.begin():
 
         tong_tien = Decimal("0")
 
+        # =========================
+        # TÍNH TỔNG TRƯỚC (KHÔNG TIN FRONTEND)
+        # =========================
+        for item in data.items:
+            tong_tien += Decimal(str(item.so_luong)) * Decimal(str(item.don_gia))
+
+        tien_mat = Decimal(str(data.tien_mat or 0))
+        tien_ck = Decimal(str(data.tien_ck or 0))
+
+        if tien_mat + tien_ck > tong_tien:
+            raise HTTPException(400, "Tiền lớn hơn tổng")
+
+        # =========================
+        # TẠO HÓA ĐƠN
+        # =========================
         hoa_don = HoaDonNhap(
-            ngay=data.ngay,
+            ngay=datetime.utcnow(),   # ✅ FIX: backend tự set
             ma_ncc=data.ma_ncc,
             ma_nv=user.ma_nv,
             ma_kho=data.ma_kho,
             trang_thai="nhap",
-            tien_mat=data.tien_mat,
-            tien_ck=data.tien_ck
+            tien_mat=tien_mat,
+            tien_ck=tien_ck
         )
 
         db.add(hoa_don)
         db.flush()
 
+        # =========================
+        # XỬ LÝ ITEMS
+        # =========================
         for item in data.items:
 
             thanh_tien = Decimal(str(item.so_luong)) * Decimal(str(item.don_gia))
-            tong_tien += thanh_tien
 
             db.add(HoaDonNhapChiTiet(
                 id_hoa_don=hoa_don.id,
@@ -120,6 +141,7 @@ def create_hoa_don_nhap(db: Session, data: HoaDonNhapCreate, user: NhanVien):
                 thanh_tien=thanh_tien
             ))
 
+            # nhật ký kho
             db.add(NhatKyKho(
                 ngay=datetime.utcnow(),
                 ma_sp=item.ma_sp,
@@ -127,21 +149,17 @@ def create_hoa_don_nhap(db: Session, data: HoaDonNhapCreate, user: NhanVien):
                 so_luong=item.so_luong,
                 loai="nhap",
                 bang_tham_chieu="hoa_don_nhap",
-                id_tham_chieu=hoa_don.id
+                id_tham_chieu=hoa_don.id,
+                ma_nv=user.ma_nv   # ✅ FIX thiếu field
             ))
 
+        # =========================
+        # UPDATE HÓA ĐƠN
+        # =========================
         hoa_don.tong_tien = tong_tien
         hoa_don.tong_thanh_toan = tong_tien
 
-        db.commit()
-        db.refresh(hoa_don)
-
         return hoa_don
-
-    except Exception as e:
-        db.rollback()
-        raise e
-
 
 # =====================================================
 # BÁN HÀNG
