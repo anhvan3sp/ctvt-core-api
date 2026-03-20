@@ -1,9 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from fastapi.responses import FileResponse
-from openpyxl import Workbook, load_workbook
-import os
-import tempfile
+from pydantic import BaseModel
+from typing import List
 
 from app.database import get_db
 from app.auth_utils import get_current_user
@@ -17,162 +15,153 @@ from app.models import (
 router = APIRouter(prefix="/system", tags=["system"])
 
 # ====================================================
-# EXPORT TEMPLATE (100% KHÔNG LỖI)
+# SCHEMA
 # ====================================================
 
-@router.get("/export-dau-ky-template")
-def export_template(user=Depends(get_current_user)):
-    if user.vai_tro != "admin":
-        raise HTTPException(403, "Chỉ admin")
+class TonKhoItem(BaseModel):
+    ma_kho: str
+    ma_sp: str
+    so_luong: float
 
-    # 👉 tạo file thật
-    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx")
-    file_path = tmp.name
+class QuyNVItem(BaseModel):
+    ma_nv: str
+    so_du: float
 
-    wb = Workbook()
+class QuyCongTyItem(BaseModel):
+    tien_mat: float = 0
+    tien_ngan_hang: float = 0
 
-    ws = wb.active
-    ws.title = "ton_kho"
-    ws.append(["ma_kho", "ma_sp", "so_luong"])
+class DauKyPayload(BaseModel):
+    ton_kho: List[TonKhoItem]
+    quy_nhan_vien: List[QuyNVItem]
+    quy_cong_ty: QuyCongTyItem
 
-    ws = wb.create_sheet("quy_nhan_vien")
-    ws.append(["ma_nv", "so_du"])
 
-    ws = wb.create_sheet("quy_cong_ty")
-    ws.append(["tien_mat", "tien_ngan_hang"])
+# ====================================================
+# GET - LOAD ĐẦU KỲ
+# ====================================================
 
-    wb.save(file_path)
-    wb.close()
+@router.get("/dau-ky")
+def get_dau_ky(
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user)
+):
+    ton_kho = db.query(TonKhoChotNgay).all()
+    quy_nv = db.query(QuyNhanVienChotNgay).all()
+    quy_ct = db.query(QuyCongTyChotNgay).first()
 
-    return FileResponse(
-        path=file_path,
-        filename="template_dau_ky.xlsx",
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
+    return {
+        "ton_kho": [
+            {
+                "ma_kho": x.ma_kho,
+                "ma_sp": x.ma_sp,
+                "so_luong": float(x.so_luong)
+            } for x in ton_kho
+        ],
+        "quy_nhan_vien": [
+            {
+                "ma_nv": x.ma_nv,
+                "so_du": float(x.so_du)
+            } for x in quy_nv
+        ],
+        "quy_cong_ty": {
+            "tien_mat": float(quy_ct.tien_mat) if quy_ct else 0,
+            "tien_ngan_hang": float(quy_ct.tien_ngan_hang) if quy_ct else 0
+        }
+    }
+
 
 # ====================================================
 # VALIDATE
 # ====================================================
 
-def validate_excel(wb):
+def validate_payload(payload: DauKyPayload):
+
     errors = []
 
-    required = ["ton_kho", "quy_nhan_vien", "quy_cong_ty"]
+    # tồn kho
+    for i, x in enumerate(payload.ton_kho):
+        if not x.ma_sp:
+            errors.append(f"ton_kho dòng {i+1}: thiếu mã SP")
 
-    for s in required:
-        if s not in wb.sheetnames:
-            errors.append(f"Thiếu sheet: {s}")
+        if not x.ma_kho:
+            errors.append(f"ton_kho dòng {i+1}: thiếu mã kho")
 
-    if errors:
-        return errors
+        if x.so_luong < 0:
+            errors.append(f"ton_kho dòng {i+1}: số lượng âm")
 
-    ws = wb["ton_kho"]
-    for i, row in enumerate(ws.iter_rows(min_row=2, values_only=True)):
-        ma_kho, ma_sp, so_luong = row
+    # quỹ NV
+    for i, x in enumerate(payload.quy_nhan_vien):
+        if not x.ma_nv:
+            errors.append(f"quy_nhan_vien dòng {i+1}: thiếu mã NV")
 
-        if not ma_sp:
-            errors.append(f"ton_kho dòng {i+2}: thiếu mã SP")
-
-        if so_luong is not None and so_luong < 0:
-            errors.append(f"ton_kho dòng {i+2}: số lượng âm")
-
-    ws = wb["quy_nhan_vien"]
-    for i, row in enumerate(ws.iter_rows(min_row=2, values_only=True)):
-        ma_nv, _ = row
-
-        if not ma_nv:
-            errors.append(f"quy_nhan_vien dòng {i+2}: thiếu mã NV")
+        if x.so_du < 0:
+            errors.append(f"quy_nhan_vien dòng {i+1}: số dư âm")
 
     return errors
 
+
 # ====================================================
-# IMPORT
+# POST - SAVE ĐẦU KỲ
 # ====================================================
 
-@router.post("/import-dau-ky")
-def import_dau_ky(
-    mode: str,
-    file: UploadFile = File(...),
+@router.post("/dau-ky")
+def save_dau_ky(
+    payload: DauKyPayload,
     db: Session = Depends(get_db),
-    user = Depends(get_current_user)
+    user=Depends(get_current_user)
 ):
     if user.vai_tro != "admin":
         raise HTTPException(403, "Chỉ admin")
 
-    if mode not in ["reset", "upsert"]:
-        raise HTTPException(400, "mode sai")
-
-    wb = load_workbook(file.file)
-
-    errors = validate_excel(wb)
+    errors = validate_payload(payload)
     if errors:
         return {"status": "error", "errors": errors}
 
     with db.begin():
 
+        # 🔥 HARD LOCK (CỰC QUAN TRỌNG)
         if db.query(ThuChi).count() > 0:
-            raise HTTPException(400, "Đã có giao dịch")
+            raise HTTPException(
+                400,
+                "Đã phát sinh giao dịch → không được sửa đầu kỳ"
+            )
 
-        if mode == "reset":
-            db.query(TonKhoChotNgay).delete()
-            db.query(QuyNhanVienChotNgay).delete()
-            db.query(QuyCongTyChotNgay).delete()
+        # ======================
+        # RESET
+        # ======================
+        db.query(TonKhoChotNgay).delete()
+        db.query(QuyNhanVienChotNgay).delete()
+        db.query(QuyCongTyChotNgay).delete()
 
+        # ======================
         # TON KHO
-        data = []
-        ws = wb["ton_kho"]
-
-        for row in ws.iter_rows(min_row=2, values_only=True):
-            ma_kho, ma_sp, so_luong = row
-            if not ma_sp:
-                continue
-
-            data.append({
-                "ma_kho": ma_kho,
-                "ma_sp": ma_sp,
-                "so_luong": so_luong or 0
-            })
-
-        if data:
+        # ======================
+        if payload.ton_kho:
             db.execute("""
                 INSERT INTO ton_kho_chot_ngay (ma_kho, ma_sp, so_luong)
                 VALUES (:ma_kho, :ma_sp, :so_luong)
-                ON DUPLICATE KEY UPDATE so_luong = VALUES(so_luong)
-            """, data)
+            """, [x.dict() for x in payload.ton_kho])
 
-        # QUỸ NV
-        data = []
-        ws = wb["quy_nhan_vien"]
-
-        for row in ws.iter_rows(min_row=2, values_only=True):
-            ma_nv, so_du = row
-            if not ma_nv:
-                continue
-
-            data.append({
-                "ma_nv": ma_nv,
-                "so_du": so_du or 0
-            })
-
-        if data:
+        # ======================
+        # QUỸ NHÂN VIÊN
+        # ======================
+        if payload.quy_nhan_vien:
             db.execute("""
                 INSERT INTO quy_nhan_vien_chot_ngay (ma_nv, so_du)
                 VALUES (:ma_nv, :so_du)
-                ON DUPLICATE KEY UPDATE so_du = VALUES(so_du)
-            """, data)
+            """, [x.dict() for x in payload.quy_nhan_vien])
 
-        # QUỸ CTY
-        ws = wb["quy_cong_ty"]
-        db.query(QuyCongTyChotNgay).delete()
+        # ======================
+        # QUỸ CÔNG TY
+        # ======================
+        tien_mat = payload.quy_cong_ty.tien_mat or 0
+        tien_ck = payload.quy_cong_ty.tien_ngan_hang or 0
 
-        for row in ws.iter_rows(min_row=2, values_only=True):
-            tien_mat, tien_ngan_hang = row
-            tong = (tien_mat or 0) + (tien_ngan_hang or 0)
-
-            db.add(QuyCongTyChotNgay(
-                tien_mat=tien_mat or 0,
-                tien_ngan_hang=tien_ngan_hang or 0,
-                tong_quy=tong
-            ))
+        db.add(QuyCongTyChotNgay(
+            tien_mat=tien_mat,
+            tien_ngan_hang=tien_ck,
+            tong_quy=tien_mat + tien_ck
+        ))
 
     return {"status": "success"}
