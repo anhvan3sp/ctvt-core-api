@@ -1,6 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List
 
 from app.database import get_db
 from app.auth_utils import get_current_user
@@ -11,15 +10,13 @@ from app.models import (
     ThuChi
 )
 
-from app.schemas import (
-    DauKyPayload
-)
+from app.schemas import DauKyPayload
 
 router = APIRouter(prefix="/system", tags=["system"])
 
 
 # =========================================
-# DANH MỤC (CHO DROPDOWN)
+# DANH MỤC
 # =========================================
 @router.get("/danh-muc")
 def get_danh_muc(db: Session = Depends(get_db)):
@@ -65,7 +62,8 @@ def get_dau_ky(db: Session = Depends(get_db)):
             "tien_mat": float(quy_ct.tien_mat) if quy_ct else 0,
             "tien_ngan_hang": float(quy_ct.tien_ngan_hang) if quy_ct else 0
         },
-        "cong_no": []  # placeholder (sau mở rộng)
+        "cong_no_khach": [],
+        "cong_no_ncc": []
     }
 
 
@@ -90,22 +88,29 @@ def save_dau_ky(
         db.query(QuyNhanVienChotNgay).delete()
         db.query(QuyCongTyChotNgay).delete()
 
+        # TON KHO
         if payload.ton_kho:
             db.execute("""
                 INSERT INTO ton_kho_chot_ngay (ma_kho, ma_sp, so_luong)
                 VALUES (:ma_kho, :ma_sp, :so_luong)
             """, [x.dict() for x in payload.ton_kho])
 
+        # QUỸ NV
         if payload.quy_nhan_vien:
             db.execute("""
                 INSERT INTO quy_nhan_vien_chot_ngay (ma_nv, so_du)
                 VALUES (:ma_nv, :so_du)
             """, [x.dict() for x in payload.quy_nhan_vien])
 
+        # QUỸ CTY
         db.add(QuyCongTyChotNgay(
             tien_mat=payload.quy_cong_ty.tien_mat,
             tien_ngan_hang=payload.quy_cong_ty.tien_ngan_hang,
             tong_quy=payload.quy_cong_ty.tien_mat + payload.quy_cong_ty.tien_ngan_hang
         ))
+
+        # 🔥 CÔNG NỢ (CHƯA LƯU DB – để sau mở rộng)
+        # payload.cong_no_khach
+        # payload.cong_no_ncc
 
     return {"status": "success"}
