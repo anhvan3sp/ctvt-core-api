@@ -5,56 +5,8 @@ from decimal import Decimal
 from enum import Enum
 
 
-
-
-
-
-class TonKhoDauKy(BaseModel):
-    ma_sp: str
-    ma_kho: str
-    so_luong: float
-
-
-class QuyNhanVienDauKy(BaseModel):
-    ma_nv: str
-    so_du: float
-
-
-class CongNoKhachHangDauKy(BaseModel):
-    ma_kh: str
-    so_no: float
-
-
-class CongNoNCCDauKy(BaseModel):
-    ma_ncc: str
-    so_no: float
-
-
-class KhoiTaoDauKyRequest(BaseModel):
-
-    ngay: str
-
-    ton_kho: List[TonKhoDauKy]
-
-    quy_nhan_vien: List[QuyNhanVienDauKy]
-
-    quy_cong_ty: float
-
-    cong_no_khach: List[CongNoKhachHangDauKy]
-
-    cong_no_ncc: List[CongNoNCCDauKy]
-
-class DebtDetailResponse(BaseModel):
-    ma_hoa_don: str
-    ngay: date
-    tong_tien: float
-    da_tra: float
-    con_no: float
-
-    class Config:
-        from_attributes = True
 # =====================================================
-# ENUMS (KHÓA GIÁ TRỊ)
+# ENUMS
 # =====================================================
 
 class LoaiThuChi(str, Enum):
@@ -139,14 +91,13 @@ class HoaDonNhapItemCreate(BaseModel):
 
 
 class HoaDonNhapCreate(BaseModel):
-    ngay: date
     ma_ncc: str
     ma_kho: str
     tien_mat: Decimal = Decimal("0")
     tien_ck: Decimal = Decimal("0")
     items: List[HoaDonNhapItemCreate]
-    tong_tien: float
     force_create: bool = False
+
 
 class HoaDonNhapResponse(BaseModel):
     id: int
@@ -201,7 +152,6 @@ class ThuChiCreate(BaseModel):
     so_tien: Decimal
     loai: LoaiThuChi
     hinh_thuc: HinhThuc
-    
 
 
 class ThuChiResponse(ThuChiCreate):
@@ -219,6 +169,11 @@ class ThuChiResponse(ThuChiCreate):
 class NopQuyRequest(BaseModel):
     so_tien: Decimal
     hinh_thuc: HinhThuc
+
+
+# =====================================================
+# KHÁCH HÀNG
+# =====================================================
 
 class CustomerBase(BaseModel):
     ma_kh: str
@@ -239,3 +194,42 @@ class CustomerResponse(CustomerBase):
 
     class Config:
         orm_mode = True
+
+
+# =====================================================
+# 🔥 ĐẦU KỲ (FIX CHUẨN)
+# =====================================================
+
+class TonKhoItem(BaseModel):
+    ma_kho: str
+    ma_sp: str
+    so_luong: float
+
+
+class QuyNVItem(BaseModel):
+    ma_nv: str
+    so_du: float
+
+
+class QuyCongTyItem(BaseModel):
+    tien_mat: float = 0
+    tien_ngan_hang: float = 0
+
+
+class CongNoKhachItem(BaseModel):
+    ma_kh: str
+    so_du: float
+
+
+class CongNoNCCItem(BaseModel):
+    ma_ncc: str
+    so_du: float
+
+
+class DauKyPayload(BaseModel):
+    ton_kho: List[TonKhoItem]
+    quy_nhan_vien: List[QuyNVItem]
+    quy_cong_ty: QuyCongTyItem
+
+    cong_no_khach: List[CongNoKhachItem] = Field(default_factory=list)
+    cong_no_ncc: List[CongNoNCCItem] = Field(default_factory=list)
