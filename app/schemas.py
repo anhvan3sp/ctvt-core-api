@@ -9,51 +9,6 @@ from datetime import date
 from pydantic import BaseModel
 from typing import List
 
-
-class TonKhoDauKy(BaseModel):
-    ma_sp: str
-    ma_kho: str
-    so_luong: float
-
-
-class QuyNhanVienDauKy(BaseModel):
-    ma_nv: str
-    so_du: float
-
-
-class CongNoKhachHangDauKy(BaseModel):
-    ma_kh: str
-    so_no: float
-
-
-class CongNoNCCDauKy(BaseModel):
-    ma_ncc: str
-    so_no: float
-
-
-class KhoiTaoDauKyRequest(BaseModel):
-
-    ngay: str
-
-    ton_kho: List[TonKhoDauKy]
-
-    quy_nhan_vien: List[QuyNhanVienDauKy]
-
-    quy_cong_ty: float
-
-    cong_no_khach: List[CongNoKhachHangDauKy]
-
-    cong_no_ncc: List[CongNoNCCDauKy]
-
-class DebtDetailResponse(BaseModel):
-    ma_hoa_don: str
-    ngay: date
-    tong_tien: float
-    da_tra: float
-    con_no: float
-
-    class Config:
-        from_attributes = True
 # =====================================================
 # ENUMS (KHÓA GIÁ TRỊ)
 # =====================================================
@@ -245,3 +200,35 @@ class CustomerResponse(CustomerBase):
 
     class Config:
         orm_mode = True
+
+
+# =========================
+# ĐẦU KỲ
+# =========================
+
+class TonKhoItem(BaseModel):
+    ma_kho: str
+    ma_sp: str
+    so_luong: float
+
+
+class QuyNVItem(BaseModel):
+    ma_nv: str
+    so_du: float
+
+
+class QuyCongTyItem(BaseModel):
+    tien_mat: float = 0
+    tien_ngan_hang: float = 0
+
+
+class CongNoItem(BaseModel):
+    ma_kh: str
+    so_du: float
+
+
+class DauKyPayload(BaseModel):
+    ton_kho: List[TonKhoItem]
+    quy_nhan_vien: List[QuyNVItem]
+    quy_cong_ty: QuyCongTyItem
+    cong_no: List[CongNoItem] = []
