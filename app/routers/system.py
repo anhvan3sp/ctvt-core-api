@@ -1,6 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
 from typing import List
 
 from app.database import get_db
@@ -12,40 +11,38 @@ from app.models import (
     ThuChi
 )
 
+from app.schemas import (
+    DauKyPayload
+)
+
 router = APIRouter(prefix="/system", tags=["system"])
 
-# ====================================================
-# SCHEMA
-# ====================================================
 
-class TonKhoItem(BaseModel):
-    ma_kho: str
-    ma_sp: str
-    so_luong: float
+# =========================================
+# DANH MỤC (CHO DROPDOWN)
+# =========================================
+@router.get("/danh-muc")
+def get_danh_muc(db: Session = Depends(get_db)):
 
-class QuyNVItem(BaseModel):
-    ma_nv: str
-    so_du: float
+    kho = db.execute("SELECT ma_kho FROM kho_hang").fetchall()
+    sp = db.execute("SELECT ma_sp FROM san_pham").fetchall()
+    nv = db.execute("SELECT ma_nv FROM nhan_vien").fetchall()
+    kh = db.execute("SELECT ma_kh FROM khach_hang").fetchall()
 
-class QuyCongTyItem(BaseModel):
-    tien_mat: float = 0
-    tien_ngan_hang: float = 0
-
-class DauKyPayload(BaseModel):
-    ton_kho: List[TonKhoItem]
-    quy_nhan_vien: List[QuyNVItem]
-    quy_cong_ty: QuyCongTyItem
+    return {
+        "kho": [x[0] for x in kho],
+        "san_pham": [x[0] for x in sp],
+        "nhan_vien": [x[0] for x in nv],
+        "khach_hang": [x[0] for x in kh]
+    }
 
 
-# ====================================================
-# GET - LOAD ĐẦU KỲ
-# ====================================================
-
+# =========================================
+# GET
+# =========================================
 @router.get("/dau-ky")
-def get_dau_ky(
-    db: Session = Depends(get_db),
-    user=Depends(get_current_user)
-):
+def get_dau_ky(db: Session = Depends(get_db)):
+
     ton_kho = db.query(TonKhoChotNgay).all()
     quy_nv = db.query(QuyNhanVienChotNgay).all()
     quy_ct = db.query(QuyCongTyChotNgay).first()
@@ -67,44 +64,14 @@ def get_dau_ky(
         "quy_cong_ty": {
             "tien_mat": float(quy_ct.tien_mat) if quy_ct else 0,
             "tien_ngan_hang": float(quy_ct.tien_ngan_hang) if quy_ct else 0
-        }
+        },
+        "cong_no": []  # placeholder (sau mở rộng)
     }
 
 
-# ====================================================
-# VALIDATE
-# ====================================================
-
-def validate_payload(payload: DauKyPayload):
-
-    errors = []
-
-    # tồn kho
-    for i, x in enumerate(payload.ton_kho):
-        if not x.ma_sp:
-            errors.append(f"ton_kho dòng {i+1}: thiếu mã SP")
-
-        if not x.ma_kho:
-            errors.append(f"ton_kho dòng {i+1}: thiếu mã kho")
-
-        if x.so_luong < 0:
-            errors.append(f"ton_kho dòng {i+1}: số lượng âm")
-
-    # quỹ NV
-    for i, x in enumerate(payload.quy_nhan_vien):
-        if not x.ma_nv:
-            errors.append(f"quy_nhan_vien dòng {i+1}: thiếu mã NV")
-
-        if x.so_du < 0:
-            errors.append(f"quy_nhan_vien dòng {i+1}: số dư âm")
-
-    return errors
-
-
-# ====================================================
-# POST - SAVE ĐẦU KỲ
-# ====================================================
-
+# =========================================
+# POST
+# =========================================
 @router.post("/dau-ky")
 def save_dau_ky(
     payload: DauKyPayload,
@@ -114,54 +81,31 @@ def save_dau_ky(
     if user.vai_tro != "admin":
         raise HTTPException(403, "Chỉ admin")
 
-    errors = validate_payload(payload)
-    if errors:
-        return {"status": "error", "errors": errors}
-
     with db.begin():
 
-        # 🔥 HARD LOCK (CỰC QUAN TRỌNG)
         if db.query(ThuChi).count() > 0:
-            raise HTTPException(
-                400,
-                "Đã phát sinh giao dịch → không được sửa đầu kỳ"
-            )
+            raise HTTPException(400, "Đã có giao dịch")
 
-        # ======================
-        # RESET
-        # ======================
         db.query(TonKhoChotNgay).delete()
         db.query(QuyNhanVienChotNgay).delete()
         db.query(QuyCongTyChotNgay).delete()
 
-        # ======================
-        # TON KHO
-        # ======================
         if payload.ton_kho:
             db.execute("""
                 INSERT INTO ton_kho_chot_ngay (ma_kho, ma_sp, so_luong)
                 VALUES (:ma_kho, :ma_sp, :so_luong)
             """, [x.dict() for x in payload.ton_kho])
 
-        # ======================
-        # QUỸ NHÂN VIÊN
-        # ======================
         if payload.quy_nhan_vien:
             db.execute("""
                 INSERT INTO quy_nhan_vien_chot_ngay (ma_nv, so_du)
                 VALUES (:ma_nv, :so_du)
             """, [x.dict() for x in payload.quy_nhan_vien])
 
-        # ======================
-        # QUỸ CÔNG TY
-        # ======================
-        tien_mat = payload.quy_cong_ty.tien_mat or 0
-        tien_ck = payload.quy_cong_ty.tien_ngan_hang or 0
-
         db.add(QuyCongTyChotNgay(
-            tien_mat=tien_mat,
-            tien_ngan_hang=tien_ck,
-            tong_quy=tien_mat + tien_ck
+            tien_mat=payload.quy_cong_ty.tien_mat,
+            tien_ngan_hang=payload.quy_cong_ty.tien_ngan_hang,
+            tong_quy=payload.quy_cong_ty.tien_mat + payload.quy_cong_ty.tien_ngan_hang
         ))
 
     return {"status": "success"}
