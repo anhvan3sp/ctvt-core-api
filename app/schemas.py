@@ -203,7 +203,7 @@ class CustomerResponse(CustomerBase):
 
 
 # =========================
-# ĐẦU KỲ
+# ĐẦU KỲ (FULL)
 # =========================
 
 class TonKhoItem(BaseModel):
@@ -222,8 +222,15 @@ class QuyCongTyItem(BaseModel):
     tien_ngan_hang: float = 0
 
 
-class CongNoItem(BaseModel):
+# 🔥 CÔNG NỢ KHÁCH
+class CongNoKhachItem(BaseModel):
     ma_kh: str
+    so_du: float
+
+
+# 🔥 CÔNG NỢ NCC (nếu dùng sau)
+class CongNoNCCItem(BaseModel):
+    ma_ncc: str
     so_du: float
 
 
@@ -231,4 +238,6 @@ class DauKyPayload(BaseModel):
     ton_kho: List[TonKhoItem]
     quy_nhan_vien: List[QuyNVItem]
     quy_cong_ty: QuyCongTyItem
-    cong_no: List[CongNoItem] = []
+
+    cong_no_khach: List[CongNoKhachItem] = []
+    cong_no_ncc: List[CongNoNCCItem] = []
