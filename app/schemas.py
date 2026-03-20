@@ -4,13 +4,9 @@ from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
 
-from pydantic import BaseModel
-from datetime import date
-from pydantic import BaseModel
-from typing import List
 
 # =====================================================
-# ENUMS (KHÓA GIÁ TRỊ)
+# ENUMS
 # =====================================================
 
 class LoaiThuChi(str, Enum):
@@ -97,17 +93,11 @@ class HoaDonNhapItemCreate(BaseModel):
 class HoaDonNhapCreate(BaseModel):
     ma_ncc: str
     ma_kho: str
-
     tien_mat: Decimal = Decimal("0")
     tien_ck: Decimal = Decimal("0")
-
     items: List[HoaDonNhapItemCreate]
-
-    # ❌ bỏ các field này:
-    # ngay
-    # tong_tien
-
     force_create: bool = False
+
 
 class HoaDonNhapResponse(BaseModel):
     id: int
@@ -162,7 +152,6 @@ class ThuChiCreate(BaseModel):
     so_tien: Decimal
     loai: LoaiThuChi
     hinh_thuc: HinhThuc
-    
 
 
 class ThuChiResponse(ThuChiCreate):
@@ -180,6 +169,11 @@ class ThuChiResponse(ThuChiCreate):
 class NopQuyRequest(BaseModel):
     so_tien: Decimal
     hinh_thuc: HinhThuc
+
+
+# =====================================================
+# KHÁCH HÀNG
+# =====================================================
 
 class CustomerBase(BaseModel):
     ma_kh: str
@@ -202,9 +196,9 @@ class CustomerResponse(CustomerBase):
         orm_mode = True
 
 
-# =========================
-# ĐẦU KỲ (FULL)
-# =========================
+# =====================================================
+# 🔥 ĐẦU KỲ (FIX CHUẨN)
+# =====================================================
 
 class TonKhoItem(BaseModel):
     ma_kho: str
@@ -222,13 +216,11 @@ class QuyCongTyItem(BaseModel):
     tien_ngan_hang: float = 0
 
 
-# 🔥 CÔNG NỢ KHÁCH
 class CongNoKhachItem(BaseModel):
     ma_kh: str
     so_du: float
 
 
-# 🔥 CÔNG NỢ NCC (nếu dùng sau)
 class CongNoNCCItem(BaseModel):
     ma_ncc: str
     so_du: float
@@ -239,5 +231,5 @@ class DauKyPayload(BaseModel):
     quy_nhan_vien: List[QuyNVItem]
     quy_cong_ty: QuyCongTyItem
 
-    cong_no_khach: List[CongNoKhachItem] = []
-    cong_no_ncc: List[CongNoNCCItem] = []
+    cong_no_khach: List[CongNoKhachItem] = Field(default_factory=list)
+    cong_no_ncc: List[CongNoNCCItem] = Field(default_factory=list)
