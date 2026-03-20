@@ -24,31 +24,32 @@ def export_template(user=Depends(get_current_user)):
     if user.vai_tro != "admin":
         raise HTTPException(403, "Chỉ admin")
 
+    output = io.BytesIO()
+
     wb = Workbook()
 
-    # ===== TỒN KHO =====
     ws = wb.active
     ws.title = "ton_kho"
     ws.append(["ma_kho", "ma_sp", "so_luong"])
 
-    # ===== QUỸ NV =====
     ws = wb.create_sheet("quy_nhan_vien")
     ws.append(["ma_nv", "so_du"])
 
-    # ===== QUỸ CTY =====
     ws = wb.create_sheet("quy_cong_ty")
     ws.append(["tien_mat", "tien_ngan_hang"])
 
-    stream = io.BytesIO()
-    wb.save(stream)
-    stream.seek(0)
+    wb.save(output)
+
+    # 🔥 QUAN TRỌNG
+    output.seek(0)
 
     return StreamingResponse(
-        stream,
+        output,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": "attachment; filename=template_dau_ky.xlsx"}
+        headers={
+            "Content-Disposition": "attachment; filename=template_dau_ky.xlsx"
+        }
     )
-
 # ====================================================
 # 2. VALIDATE
 # ====================================================
