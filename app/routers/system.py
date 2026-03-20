@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy import text  # 🔥 BẮT BUỘC
 
 from app.database import get_db
 from app.auth_utils import get_current_user
@@ -10,7 +11,6 @@ from app.models import (
     ThuChi
 )
 
-# 🔥 DÙNG SCHEMA GỐC
 from app.schemas import KhoiTaoDauKyRequest
 
 router = APIRouter(prefix="/system", tags=["system"])
@@ -23,11 +23,11 @@ router = APIRouter(prefix="/system", tags=["system"])
 def get_danh_muc(db: Session = Depends(get_db)):
 
     return {
-        "kho": [x[0] for x in db.execute("SELECT ma_kho FROM kho_hang")],
-        "san_pham": [x[0] for x in db.execute("SELECT ma_sp FROM san_pham")],
-        "nhan_vien": [x[0] for x in db.execute("SELECT ma_nv FROM nhan_vien")],
-        "khach_hang": [x[0] for x in db.execute("SELECT ma_kh FROM khach_hang")],
-        "ncc": [x[0] for x in db.execute("SELECT ma_ncc FROM nha_cung_cap")]
+        "kho": [x[0] for x in db.execute(text("SELECT ma_kho FROM kho_hang"))],
+        "san_pham": [x[0] for x in db.execute(text("SELECT ma_sp FROM san_pham"))],
+        "nhan_vien": [x[0] for x in db.execute(text("SELECT ma_nv FROM nhan_vien"))],
+        "khach_hang": [x[0] for x in db.execute(text("SELECT ma_kh FROM khach_hang"))],
+        "ncc": [x[0] for x in db.execute(text("SELECT ma_ncc FROM nha_cung_cap"))],
     }
 
 
@@ -41,13 +41,13 @@ def get_dau_ky(db: Session = Depends(get_db)):
     quy_nv = db.query(QuyNhanVienChotNgay).all()
     quy_ct = db.query(QuyCongTyChotNgay).first()
 
-    cong_no_khach = db.execute(
-        "SELECT ma_kh, so_du FROM cong_no_khach_hang"
-    ).fetchall()
+    cong_no_khach = db.execute(text("""
+        SELECT ma_kh, so_du FROM cong_no_khach_hang
+    """)).fetchall()
 
-    cong_no_ncc = db.execute(
-        "SELECT ma_ncc, so_du FROM cong_no_ncc"
-    ).fetchall()
+    cong_no_ncc = db.execute(text("""
+        SELECT ma_ncc, so_du FROM cong_no_ncc
+    """)).fetchall()
 
     return {
         "ton_kho": [
@@ -62,7 +62,7 @@ def get_dau_ky(db: Session = Depends(get_db)):
             "tien_mat": float(quy_ct.tien_mat) if quy_ct else 0,
             "tien_ngan_hang": float(quy_ct.tien_ngan_hang) if quy_ct else 0
         },
-        # 🔥 FRONTEND đang dùng so_no → map lại
+        # 🔥 map lại cho frontend
         "cong_no_khach": [
             {"ma_kh": x[0], "so_no": float(x[1])}
             for x in cong_no_khach
@@ -79,7 +79,7 @@ def get_dau_ky(db: Session = Depends(get_db)):
 # =========================
 @router.post("/dau-ky")
 def save_dau_ky(
-    payload: KhoiTaoDauKyRequest,   # 🔥 FIX CHUẨN
+    payload: KhoiTaoDauKyRequest,
     db: Session = Depends(get_db),
     user=Depends(get_current_user)
 ):
@@ -99,29 +99,29 @@ def save_dau_ky(
         db.query(QuyNhanVienChotNgay).delete()
         db.query(QuyCongTyChotNgay).delete()
 
-        db.execute("DELETE FROM cong_no_khach_hang")
-        db.execute("DELETE FROM cong_no_ncc")
+        db.execute(text("DELETE FROM cong_no_khach_hang"))
+        db.execute(text("DELETE FROM cong_no_ncc"))
 
         # ======================
         # TON KHO
         # ======================
         if payload.ton_kho:
-            db.execute("""
+            db.execute(text("""
                 INSERT INTO ton_kho_chot_ngay (ma_kho, ma_sp, so_luong)
                 VALUES (:ma_kho, :ma_sp, :so_luong)
-            """, [x.dict() for x in payload.ton_kho])
+            """), [x.dict() for x in payload.ton_kho])
 
         # ======================
         # QUỸ NV
         # ======================
         if payload.quy_nhan_vien:
-            db.execute("""
+            db.execute(text("""
                 INSERT INTO quy_nhan_vien_chot_ngay (ma_nv, so_du)
                 VALUES (:ma_nv, :so_du)
-            """, [x.dict() for x in payload.quy_nhan_vien])
+            """), [x.dict() for x in payload.quy_nhan_vien])
 
         # ======================
-        # QUỸ CTY (schema cũ: 1 số)
+        # QUỸ CÔNG TY
         # ======================
         db.add(QuyCongTyChotNgay(
             tien_mat=payload.quy_cong_ty,
@@ -133,18 +133,18 @@ def save_dau_ky(
         # CÔNG NỢ KHÁCH
         # ======================
         if payload.cong_no_khach:
-            db.execute("""
+            db.execute(text("""
                 INSERT INTO cong_no_khach_hang (ma_kh, so_du)
                 VALUES (:ma_kh, :so_no)
-            """, [x.dict() for x in payload.cong_no_khach])
+            """), [x.dict() for x in payload.cong_no_khach])
 
         # ======================
         # CÔNG NỢ NCC
         # ======================
         if payload.cong_no_ncc:
-            db.execute("""
+            db.execute(text("""
                 INSERT INTO cong_no_ncc (ma_ncc, so_du)
                 VALUES (:ma_ncc, :so_no)
-            """, [x.dict() for x in payload.cong_no_ncc])
+            """), [x.dict() for x in payload.cong_no_ncc])
 
     return {"status": "success"}
