@@ -176,6 +176,9 @@ class CustomerBase(BaseModel):
     ma_kh: str
     ten_cua_hang: str
 
+class CustomerCreate(CustomerBase):
+    pass
+
 
 class CustomerResponse(CustomerBase):
     id: int
