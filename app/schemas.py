@@ -6,6 +6,55 @@ from enum import Enum
 
 
 # =====================================================
+# 🔥 ĐẦU KỲ (GIỮ FILE CŨ + FIX)
+# =====================================================
+
+class TonKhoDauKy(BaseModel):
+    ma_sp: str
+    ma_kho: str
+    so_luong: float
+
+
+class QuyNhanVienDauKy(BaseModel):
+    ma_nv: str
+    so_du: float
+
+
+class CongNoKhachHangDauKy(BaseModel):
+    ma_kh: str
+    so_no: float
+
+
+class CongNoNCCDauKy(BaseModel):
+    ma_ncc: str
+    so_no: float
+
+
+class KhoiTaoDauKyRequest(BaseModel):
+    ngay: str
+    ton_kho: List[TonKhoDauKy]
+    quy_nhan_vien: List[QuyNhanVienDauKy]
+    quy_cong_ty: float
+    cong_no_khach: List[CongNoKhachHangDauKy] = Field(default_factory=list)
+    cong_no_ncc: List[CongNoNCCDauKy] = Field(default_factory=list)
+
+
+# =====================================================
+# 🔥 CÔNG NỢ CHI TIẾT (GIỮ NGUYÊN)
+# =====================================================
+
+class DebtDetailResponse(BaseModel):
+    ma_hoa_don: str
+    ngay: date
+    tong_tien: float
+    da_tra: float
+    con_no: float
+
+    class Config:
+        from_attributes = True
+
+
+# =====================================================
 # ENUMS
 # =====================================================
 
@@ -88,11 +137,13 @@ class HoaDonNhapItemCreate(BaseModel):
 
 
 class HoaDonNhapCreate(BaseModel):
+    ngay: date
     ma_ncc: str
     ma_kho: str
     tien_mat: Decimal = Decimal("0")
     tien_ck: Decimal = Decimal("0")
     items: List[HoaDonNhapItemCreate]
+    tong_tien: float
     force_create: bool = False
 
 
@@ -169,12 +220,18 @@ class NopQuyRequest(BaseModel):
 
 
 # =====================================================
-# KHÁCH HÀNG
+# KHÁCH HÀNG (GIỮ NGUYÊN)
 # =====================================================
 
 class CustomerBase(BaseModel):
     ma_kh: str
     ten_cua_hang: str
+    ten_cua_hang_chi_tiet: Optional[str] = None
+    so_dien_thoai: Optional[str] = None
+    dia_chi: Optional[str] = None
+    ma_so_thue: Optional[str] = None
+    ghi_chu: Optional[str] = None
+
 
 class CustomerCreate(CustomerBase):
     pass
@@ -185,42 +242,3 @@ class CustomerResponse(CustomerBase):
 
     class Config:
         orm_mode = True
-
-
-# =====================================================
-# 🔥 ĐẦU KỲ
-# =====================================================
-
-class TonKhoItem(BaseModel):
-    ma_kho: str
-    ma_sp: str
-    so_luong: float
-
-
-class QuyNVItem(BaseModel):
-    ma_nv: str
-    so_du: float
-
-
-class QuyCongTyItem(BaseModel):
-    tien_mat: float = 0
-    tien_ngan_hang: float = 0
-
-
-class CongNoKhachItem(BaseModel):
-    ma_kh: str
-    so_du: float
-
-
-class CongNoNCCItem(BaseModel):
-    ma_ncc: str
-    so_du: float
-
-
-class DauKyPayload(BaseModel):
-    ton_kho: List[TonKhoItem]
-    quy_nhan_vien: List[QuyNVItem]
-    quy_cong_ty: QuyCongTyItem
-
-    cong_no_khach: List[CongNoKhachItem] = Field(default_factory=list)
-    cong_no_ncc: List[CongNoNCCItem] = Field(default_factory=list)
