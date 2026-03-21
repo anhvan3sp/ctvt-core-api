@@ -35,7 +35,7 @@ class QuyCongTyDauKy(BaseModel):
 
 
 class KhoiTaoDauKyRequest(BaseModel):
-    ngay: str
+    ngay: Optional[str] = None
     ton_kho: List[TonKhoDauKy]
     quy_nhan_vien: List[QuyNhanVienDauKy]
 
