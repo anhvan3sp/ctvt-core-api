@@ -29,12 +29,19 @@ class CongNoNCCDauKy(BaseModel):
     ma_ncc: str
     so_no: float
 
+class QuyCongTyDauKy(BaseModel):
+    tien_mat: float = 0
+    tien_ngan_hang: float = 0
+
 
 class KhoiTaoDauKyRequest(BaseModel):
     ngay: str
     ton_kho: List[TonKhoDauKy]
     quy_nhan_vien: List[QuyNhanVienDauKy]
-    quy_cong_ty: float
+
+    # 🔥 FIX 422: từ float → object
+    quy_cong_ty: QuyCongTyDauKy
+
     cong_no_khach: List[CongNoKhachHangDauKy] = Field(default_factory=list)
     cong_no_ncc: List[CongNoNCCDauKy] = Field(default_factory=list)
 
