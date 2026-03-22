@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-from datetime import date
 
 from app.database import get_db
 from app.auth_utils import get_current_user
@@ -51,11 +50,18 @@ def get_dau_ky(db: Session = Depends(get_db)):
 
     return {
         "ton_kho": [
-            {"ma_kho": x.ma_kho, "ma_sp": x.ma_sp, "so_luong": float(x.so_luong)}
+            {
+                "ma_kho": x.ma_kho,
+                "ma_sp": x.ma_sp,
+                "so_luong": float(x.so_luong)
+            }
             for x in ton_kho
         ],
         "quy_nhan_vien": [
-            {"ma_nv": x.ma_nv, "so_du": float(x.so_du)}
+            {
+                "ma_nv": x.ma_nv,
+                "so_du": float(x.so_du)
+            }
             for x in quy_nv
         ],
         "quy_cong_ty": {
@@ -85,8 +91,6 @@ def save_dau_ky(
     if user.vai_tro != "admin":
         raise HTTPException(403, "Chỉ admin")
 
-    ngay = payload.ngay or date.today().isoformat()
-
     try:
         # ===== HARD LOCK (ERP RULE) =====
         if db.query(ThuChi).count() > 0:
@@ -103,11 +107,10 @@ def save_dau_ky(
         # ===== TON KHO =====
         if payload.ton_kho:
             db.execute(text("""
-                INSERT INTO ton_kho_chot_ngay (ngay, ma_kho, ma_sp, so_luong)
-                VALUES (:ngay, :ma_kho, :ma_sp, :so_luong)
+                INSERT INTO ton_kho_chot_ngay (ma_kho, ma_sp, so_luong)
+                VALUES (:ma_kho, :ma_sp, :so_luong)
             """), [
                 {
-                    "ngay": ngay,
                     "ma_kho": x.ma_kho,
                     "ma_sp": x.ma_sp,
                     "so_luong": x.so_luong
@@ -118,11 +121,10 @@ def save_dau_ky(
         # ===== QUỸ NV =====
         if payload.quy_nhan_vien:
             db.execute(text("""
-                INSERT INTO quy_nhan_vien_chot_ngay (ngay, ma_nv, so_du)
-                VALUES (:ngay, :ma_nv, :so_du)
+                INSERT INTO quy_nhan_vien_chot_ngay (ma_nv, so_du)
+                VALUES (:ma_nv, :so_du)
             """), [
                 {
-                    "ngay": ngay,
                     "ma_nv": x.ma_nv,
                     "so_du": x.so_du
                 }
@@ -131,7 +133,6 @@ def save_dau_ky(
 
         # ===== QUỸ CÔNG TY =====
         db.add(QuyCongTyChotNgay(
-            ngay=ngay,
             tien_mat=payload.quy_cong_ty.tien_mat,
             tien_ngan_hang=payload.quy_cong_ty.tien_ngan_hang,
             tong_quy=payload.quy_cong_ty.tien_mat + payload.quy_cong_ty.tien_ngan_hang
@@ -143,7 +144,10 @@ def save_dau_ky(
                 INSERT INTO cong_no_khach_hang (ma_kh, so_du)
                 VALUES (:ma_kh, :so_no)
             """), [
-                {"ma_kh": x.ma_kh, "so_no": x.so_no}
+                {
+                    "ma_kh": x.ma_kh,
+                    "so_no": x.so_no
+                }
                 for x in payload.cong_no_khach
             ])
 
@@ -153,7 +157,10 @@ def save_dau_ky(
                 INSERT INTO cong_no_ncc (ma_ncc, so_du)
                 VALUES (:ma_ncc, :so_no)
             """), [
-                {"ma_ncc": x.ma_ncc, "so_no": x.so_no}
+                {
+                    "ma_ncc": x.ma_ncc,
+                    "so_no": x.so_no
+                }
                 for x in payload.cong_no_ncc
             ])
 
@@ -161,7 +168,7 @@ def save_dau_ky(
 
     except HTTPException as e:
         db.rollback()
-        raise e  # 🔥 giữ nguyên lỗi 400
+        raise e
 
     except Exception as e:
         db.rollback()
