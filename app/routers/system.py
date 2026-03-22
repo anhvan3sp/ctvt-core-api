@@ -17,65 +17,86 @@ router = APIRouter(prefix="/system", tags=["system"])
 
 
 # =========================
-# DANH MỤC
+# HELPER
+# =========================
+def check_duplicate(items, keys):
+    seen = set()
+    for item in items:
+        key = tuple(getattr(item, k) for k in keys)
+        if key in seen:
+            raise HTTPException(400, f"Trùng dữ liệu: {key}")
+        seen.add(key)
+
+
+def validate_data(payload):
+    # ===== TỒN KHO =====
+    for x in payload.ton_kho:
+        if not x.ma_kho or not x.ma_sp:
+            raise HTTPException(400, "Thiếu mã kho hoặc sản phẩm")
+        if x.so_luong < 0:
+            raise HTTPException(400, "Số lượng không được âm")
+
+    check_duplicate(payload.ton_kho, ["ma_kho", "ma_sp"])
+
+    # ===== QUỸ NV =====
+    for x in payload.quy_nhan_vien:
+        if not x.ma_nv:
+            raise HTTPException(400, "Thiếu mã nhân viên")
+        if x.so_du < 0:
+            raise HTTPException(400, "Số dư không được âm")
+
+    check_duplicate(payload.quy_nhan_vien, ["ma_nv"])
+
+    # ===== CÔNG NỢ KH =====
+    for x in payload.cong_no_khach:
+        if not x.ma_kh:
+            raise HTTPException(400, "Thiếu mã khách hàng")
+        if x.so_no < 0:
+            raise HTTPException(400, "Công nợ không được âm")
+
+    check_duplicate(payload.cong_no_khach, ["ma_kh"])
+
+    # ===== CÔNG NỢ NCC =====
+    for x in payload.cong_no_ncc:
+        if not x.ma_ncc:
+            raise HTTPException(400, "Thiếu mã NCC")
+        if x.so_no < 0:
+            raise HTTPException(400, "Công nợ không được âm")
+
+    check_duplicate(payload.cong_no_ncc, ["ma_ncc"])
+
+
+# =========================
+# DANH MỤC (FIX UX)
 # =========================
 @router.get("/danh-muc")
 def get_danh_muc(db: Session = Depends(get_db)):
     return {
-        "kho": [x[0] for x in db.execute(text("SELECT ma_kho FROM kho_hang"))],
-        "san_pham": [x[0] for x in db.execute(text("SELECT ma_sp FROM san_pham"))],
-        "nhan_vien": [x[0] for x in db.execute(text("SELECT ma_nv FROM nhan_vien"))],
-        "khach_hang": [x[0] for x in db.execute(text("SELECT ma_kh FROM khach_hang"))],
-        "ncc": [x[0] for x in db.execute(text("SELECT ma_ncc FROM nha_cung_cap"))],
-    }
-
-
-# =========================
-# GET
-# =========================
-@router.get("/dau-ky")
-def get_dau_ky(db: Session = Depends(get_db)):
-
-    ton_kho = db.query(TonKhoChotNgay).all()
-    quy_nv = db.query(QuyNhanVienChotNgay).all()
-    quy_ct = db.query(QuyCongTyChotNgay).first()
-
-    cong_no_khach = db.execute(text("""
-        SELECT ma_kh, so_du FROM cong_no_khach_hang
-    """)).fetchall()
-
-    cong_no_ncc = db.execute(text("""
-        SELECT ma_ncc, so_du FROM cong_no_ncc
-    """)).fetchall()
-
-    return {
-        "ton_kho": [
+        "kho": [
+            {"ma_kho": x[0], "ten_kho": x[0]}
+            for x in db.execute(text("SELECT ma_kho FROM kho_hang"))
+        ],
+        "san_pham": [
+            {"ma_sp": x[0], "ten_sp": x[0]}
+            for x in db.execute(text("SELECT ma_sp FROM san_pham"))
+        ],
+        "nhan_vien": [
+            {"ma_nv": x[0], "ten_nv": x[0]}
+            for x in db.execute(text("SELECT ma_nv FROM nhan_vien"))
+        ],
+        "khach_hang": [
             {
-                "ma_kho": x.ma_kho,
-                "ma_sp": x.ma_sp,
-                "so_luong": float(x.so_luong)
+                "ma_kh": x[0],
+                "ten_kh": x[1]  # 🔥 hiển thị tên
             }
-            for x in ton_kho
+            for x in db.execute(text("""
+                SELECT ma_kh, ten_cua_hang FROM khach_hang
+            """))
         ],
-        "quy_nhan_vien": [
-            {
-                "ma_nv": x.ma_nv,
-                "so_du": float(x.so_du)
-            }
-            for x in quy_nv
+        "ncc": [
+            {"ma_ncc": x[0], "ten_ncc": x[0]}
+            for x in db.execute(text("SELECT ma_ncc FROM nha_cung_cap"))
         ],
-        "quy_cong_ty": {
-            "tien_mat": float(quy_ct.tien_mat) if quy_ct else 0,
-            "tien_ngan_hang": float(quy_ct.tien_ngan_hang) if quy_ct else 0
-        },
-        "cong_no_khach": [
-            {"ma_kh": x[0], "so_no": float(x[1])}
-            for x in cong_no_khach
-        ],
-        "cong_no_ncc": [
-            {"ma_ncc": x[0], "so_no": float(x[1])}
-            for x in cong_no_ncc
-        ]
     }
 
 
@@ -92,7 +113,10 @@ def save_dau_ky(
         raise HTTPException(403, "Chỉ admin")
 
     try:
-        # ===== HARD LOCK (ERP RULE) =====
+        # ===== VALIDATE =====
+        validate_data(payload)
+
+        # ===== HARD LOCK =====
         if db.query(ThuChi).count() > 0:
             raise HTTPException(400, "Đã có giao dịch")
 
@@ -109,29 +133,16 @@ def save_dau_ky(
             db.execute(text("""
                 INSERT INTO ton_kho_chot_ngay (ma_kho, ma_sp, so_luong)
                 VALUES (:ma_kho, :ma_sp, :so_luong)
-            """), [
-                {
-                    "ma_kho": x.ma_kho,
-                    "ma_sp": x.ma_sp,
-                    "so_luong": x.so_luong
-                }
-                for x in payload.ton_kho
-            ])
+            """), [x.dict() for x in payload.ton_kho])
 
         # ===== QUỸ NV =====
         if payload.quy_nhan_vien:
             db.execute(text("""
                 INSERT INTO quy_nhan_vien_chot_ngay (ma_nv, so_du)
                 VALUES (:ma_nv, :so_du)
-            """), [
-                {
-                    "ma_nv": x.ma_nv,
-                    "so_du": x.so_du
-                }
-                for x in payload.quy_nhan_vien
-            ])
+            """), [x.dict() for x in payload.quy_nhan_vien])
 
-        # ===== QUỸ CÔNG TY =====
+        # ===== QUỸ CTY =====
         db.add(QuyCongTyChotNgay(
             tien_mat=payload.quy_cong_ty.tien_mat,
             tien_ngan_hang=payload.quy_cong_ty.tien_ngan_hang,
@@ -143,26 +154,14 @@ def save_dau_ky(
             db.execute(text("""
                 INSERT INTO cong_no_khach_hang (ma_kh, so_du)
                 VALUES (:ma_kh, :so_no)
-            """), [
-                {
-                    "ma_kh": x.ma_kh,
-                    "so_no": x.so_no
-                }
-                for x in payload.cong_no_khach
-            ])
+            """), [x.dict() for x in payload.cong_no_khach])
 
         # ===== CÔNG NỢ NCC =====
         if payload.cong_no_ncc:
             db.execute(text("""
                 INSERT INTO cong_no_ncc (ma_ncc, so_du)
                 VALUES (:ma_ncc, :so_no)
-            """), [
-                {
-                    "ma_ncc": x.ma_ncc,
-                    "so_no": x.so_no
-                }
-                for x in payload.cong_no_ncc
-            ])
+            """), [x.dict() for x in payload.cong_no_ncc])
 
         db.commit()
 
