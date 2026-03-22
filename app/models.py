@@ -209,7 +209,8 @@ class ThuChi(Base):
     so_du_ct_sau = Column(DECIMAL(18,2))
 
     ngay_tao = Column(DateTime, default=datetime.utcnow)
-
+    ma_kh = Column(String(50), nullable=True)
+    ma_ncc = Column(String(50), nullable=True)
 
 # ======================
 # QUỸ NHÂN VIÊN
