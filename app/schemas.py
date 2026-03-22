@@ -202,11 +202,13 @@ class HoaDonBanResponse(BaseModel):
 # =====================================================
 
 class ThuChiCreate(BaseModel):
-    ngay: datetime
-    doi_tuong: DoiTuong
-    so_tien: Decimal
-    loai: LoaiThuChi
-    hinh_thuc: HinhThuc
+    loai: str
+    loai_giao_dich: str
+    so_tien: float
+    hinh_thuc: str
+
+    ma_kh: Optional[str] = None
+    ma_ncc: Optional[str] = None
 
 
 class ThuChiResponse(ThuChiCreate):
