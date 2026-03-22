@@ -88,7 +88,7 @@ def save_dau_ky(
     ngay = payload.ngay or date.today().isoformat()
 
     try:
-        # ===== HARD LOCK =====
+        # ===== HARD LOCK (ERP RULE) =====
         if db.query(ThuChi).count() > 0:
             raise HTTPException(400, "Đã có giao dịch")
 
@@ -129,7 +129,7 @@ def save_dau_ky(
                 for x in payload.quy_nhan_vien
             ])
 
-        # ===== QUỸ CTY =====
+        # ===== QUỸ CÔNG TY =====
         db.add(QuyCongTyChotNgay(
             ngay=ngay,
             tien_mat=payload.quy_cong_ty.tien_mat,
@@ -158,6 +158,10 @@ def save_dau_ky(
             ])
 
         db.commit()
+
+    except HTTPException as e:
+        db.rollback()
+        raise e  # 🔥 giữ nguyên lỗi 400
 
     except Exception as e:
         db.rollback()
