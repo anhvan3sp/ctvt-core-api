@@ -23,35 +23,33 @@ def create_thu_chi(
     user=Depends(get_current_user)
 ):
 
-    # =========================
-    # VALIDATE CHUNG
-    # =========================
-    if data.so_tien <= 0:
-        raise HTTPException(400, "Số tiền phải > 0")
+    try:
 
-    VALID_GD = [
-        "nop_tien",
-        "khach_tra_no",
-        "chuyen_khoan",
-        "nop_them",
-        "tra_no_ncc",
-        "do_dau",
-        "sua_xe",
-        "chi_khac",
-        "thu_khac"
-    ]
+        # =========================
+        # VALIDATE
+        # =========================
+        if data.so_tien <= 0:
+            raise HTTPException(400, "Số tiền phải > 0")
 
-    if data.loai_giao_dich not in VALID_GD:
-        raise HTTPException(400, "Loại giao dịch không hợp lệ")
+        VALID_GD = [
+            "nop_tien",
+            "khach_tra_no",
+            "chuyen_khoan",
+            "nop_them",
+            "tra_no_ncc",
+            "do_dau",
+            "sua_xe",
+            "chi_khac",
+            "thu_khac"
+        ]
 
-    with db.begin():
+        if data.loai_giao_dich not in VALID_GD:
+            raise HTTPException(400, "Loại giao dịch không hợp lệ")
 
         # =========================
         # LOCK QUỸ
         # =========================
-        quy_ct = db.query(QuyCongTyChotNgay)\
-            .with_for_update()\
-            .first()
+        quy_ct = db.query(QuyCongTyChotNgay).with_for_update().first()
 
         quy_nv = None
 
@@ -74,7 +72,6 @@ def create_thu_chi(
             if not quy_nv:
                 raise HTTPException(400, "Chưa có quỹ nhân viên")
 
-            # ===== NỘP TIỀN =====
             if data.loai_giao_dich == "nop_tien":
 
                 if quy_nv.so_du < so_tien:
@@ -83,7 +80,6 @@ def create_thu_chi(
                 quy_nv.so_du -= so_tien
                 quy_ct.tien_mat += so_tien
 
-            # ===== KHÁCH TRẢ NỢ =====
             elif data.loai_giao_dich == "khach_tra_no":
 
                 if not data.ma_kh:
@@ -106,7 +102,6 @@ def create_thu_chi(
                 else:
                     quy_ct.tien_ngan_hang += so_tien
 
-            # ===== CHI THƯỜNG =====
             elif data.loai_giao_dich in ["do_dau", "sua_xe", "chi_khac"]:
 
                 if quy_nv.so_du < so_tien:
@@ -114,7 +109,6 @@ def create_thu_chi(
 
                 quy_nv.so_du -= so_tien
 
-            # ===== THU KHÁC =====
             elif data.loai_giao_dich == "thu_khac":
                 quy_nv.so_du += so_tien
 
@@ -123,7 +117,6 @@ def create_thu_chi(
         # =========================
         else:
 
-            # ===== CHUYỂN KHOẢN =====
             if data.loai_giao_dich == "chuyen_khoan":
 
                 if quy_ct.tien_mat < so_tien:
@@ -132,7 +125,6 @@ def create_thu_chi(
                 quy_ct.tien_mat -= so_tien
                 quy_ct.tien_ngan_hang += so_tien
 
-            # ===== NỘP THÊM =====
             elif data.loai_giao_dich == "nop_them":
 
                 if data.hinh_thuc == "tien_mat":
@@ -140,7 +132,6 @@ def create_thu_chi(
                 else:
                     quy_ct.tien_ngan_hang += so_tien
 
-            # ===== TRẢ NCC =====
             elif data.loai_giao_dich == "tra_no_ncc":
 
                 if not data.ma_ncc:
@@ -174,7 +165,7 @@ def create_thu_chi(
         quy_ct.tong_quy = quy_ct.tien_mat + quy_ct.tien_ngan_hang
 
         # =========================
-        # LOG (SẠCH DATA)
+        # LOG
         # =========================
         db.add(ThuChi(
             ngay=datetime.now(),
@@ -189,6 +180,16 @@ def create_thu_chi(
             so_du_sau=quy_nv.so_du if quy_nv else 0,
             so_du_ct_sau=quy_ct.tong_quy
         ))
+
+        db.commit()
+
+    except HTTPException as e:
+        db.rollback()
+        raise e
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(500, str(e))
 
     return {
         "msg": "OK",
