@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from datetime import datetime
+from decimal import Decimal
 
 from app.database import get_db
 from app.models import (
@@ -46,6 +47,9 @@ def create_thu_chi(
         if data.loai_giao_dich not in VALID_GD:
             raise HTTPException(400, "Loại giao dịch không hợp lệ")
 
+        # 🔥 FIX QUAN TRỌNG
+        so_tien = Decimal(str(data.so_tien))
+
         # =========================
         # LOCK QUỸ
         # =========================
@@ -62,8 +66,6 @@ def create_thu_chi(
         if not quy_ct:
             raise HTTPException(400, "Chưa có quỹ công ty")
 
-        so_tien = data.so_tien
-
         # =========================
         # NHÂN VIÊN
         # =========================
@@ -72,6 +74,7 @@ def create_thu_chi(
             if not quy_nv:
                 raise HTTPException(400, "Chưa có quỹ nhân viên")
 
+            # ===== NỘP TIỀN =====
             if data.loai_giao_dich == "nop_tien":
 
                 if quy_nv.so_du < so_tien:
@@ -80,6 +83,7 @@ def create_thu_chi(
                 quy_nv.so_du -= so_tien
                 quy_ct.tien_mat += so_tien
 
+            # ===== KHÁCH TRẢ NỢ =====
             elif data.loai_giao_dich == "khach_tra_no":
 
                 if not data.ma_kh:
@@ -102,6 +106,7 @@ def create_thu_chi(
                 else:
                     quy_ct.tien_ngan_hang += so_tien
 
+            # ===== CHI THƯỜNG =====
             elif data.loai_giao_dich in ["do_dau", "sua_xe", "chi_khac"]:
 
                 if quy_nv.so_du < so_tien:
@@ -109,6 +114,7 @@ def create_thu_chi(
 
                 quy_nv.so_du -= so_tien
 
+            # ===== THU KHÁC =====
             elif data.loai_giao_dich == "thu_khac":
                 quy_nv.so_du += so_tien
 
@@ -117,6 +123,7 @@ def create_thu_chi(
         # =========================
         else:
 
+            # ===== CHUYỂN KHOẢN =====
             if data.loai_giao_dich == "chuyen_khoan":
 
                 if quy_ct.tien_mat < so_tien:
@@ -125,6 +132,7 @@ def create_thu_chi(
                 quy_ct.tien_mat -= so_tien
                 quy_ct.tien_ngan_hang += so_tien
 
+            # ===== NỘP THÊM =====
             elif data.loai_giao_dich == "nop_them":
 
                 if data.hinh_thuc == "tien_mat":
@@ -132,6 +140,7 @@ def create_thu_chi(
                 else:
                     quy_ct.tien_ngan_hang += so_tien
 
+            # ===== TRẢ NCC =====
             elif data.loai_giao_dich == "tra_no_ncc":
 
                 if not data.ma_ncc:
@@ -177,7 +186,7 @@ def create_thu_chi(
             loai_giao_dich=data.loai_giao_dich,
             ma_kh=data.ma_kh if data.loai_giao_dich == "khach_tra_no" else None,
             ma_ncc=data.ma_ncc if data.loai_giao_dich == "tra_no_ncc" else None,
-            so_du_sau=quy_nv.so_du if quy_nv else 0,
+            so_du_sau=quy_nv.so_du if quy_nv else Decimal("0"),
             so_du_ct_sau=quy_ct.tong_quy
         ))
 
@@ -193,6 +202,6 @@ def create_thu_chi(
 
     return {
         "msg": "OK",
-        "so_du_nv": quy_nv.so_du if quy_nv else 0,
-        "tong_quy": quy_ct.tong_quy
+        "so_du_nv": float(quy_nv.so_du) if quy_nv else 0,
+        "tong_quy": float(quy_ct.tong_quy)
     }
