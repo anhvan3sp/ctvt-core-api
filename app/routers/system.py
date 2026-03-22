@@ -51,18 +51,11 @@ def get_dau_ky(db: Session = Depends(get_db)):
 
     return {
         "ton_kho": [
-            {
-                "ma_kho": x.ma_kho,
-                "ma_sp": x.ma_sp,
-                "so_luong": float(x.so_luong)
-            }
+            {"ma_kho": x.ma_kho, "ma_sp": x.ma_sp, "so_luong": float(x.so_luong)}
             for x in ton_kho
         ],
         "quy_nhan_vien": [
-            {
-                "ma_nv": x.ma_nv,
-                "so_du": float(x.so_du)
-            }
+            {"ma_nv": x.ma_nv, "so_du": float(x.so_du)}
             for x in quy_nv
         ],
         "quy_cong_ty": {
@@ -92,18 +85,14 @@ def save_dau_ky(
     if user.vai_tro != "admin":
         raise HTTPException(403, "Chỉ admin")
 
-    # ===== FIX: nếu thiếu ngày thì auto lấy hôm nay =====
     ngay = payload.ngay or date.today().isoformat()
 
-    with db.begin():
-
+    try:
         # ===== HARD LOCK =====
         if db.query(ThuChi).count() > 0:
             raise HTTPException(400, "Đã có giao dịch")
 
-        # ======================
-        # RESET
-        # ======================
+        # ===== RESET =====
         db.query(TonKhoChotNgay).delete()
         db.query(QuyNhanVienChotNgay).delete()
         db.query(QuyCongTyChotNgay).delete()
@@ -111,9 +100,7 @@ def save_dau_ky(
         db.execute(text("DELETE FROM cong_no_khach_hang"))
         db.execute(text("DELETE FROM cong_no_ncc"))
 
-        # ======================
-        # TON KHO
-        # ======================
+        # ===== TON KHO =====
         if payload.ton_kho:
             db.execute(text("""
                 INSERT INTO ton_kho_chot_ngay (ngay, ma_kho, ma_sp, so_luong)
@@ -128,9 +115,7 @@ def save_dau_ky(
                 for x in payload.ton_kho
             ])
 
-        # ======================
-        # QUỸ NV
-        # ======================
+        # ===== QUỸ NV =====
         if payload.quy_nhan_vien:
             db.execute(text("""
                 INSERT INTO quy_nhan_vien_chot_ngay (ngay, ma_nv, so_du)
@@ -144,9 +129,7 @@ def save_dau_ky(
                 for x in payload.quy_nhan_vien
             ])
 
-        # ======================
-        # QUỸ CÔNG TY (FIX CHÍ MẠNG)
-        # ======================
+        # ===== QUỸ CTY =====
         db.add(QuyCongTyChotNgay(
             ngay=ngay,
             tien_mat=payload.quy_cong_ty.tien_mat,
@@ -154,34 +137,30 @@ def save_dau_ky(
             tong_quy=payload.quy_cong_ty.tien_mat + payload.quy_cong_ty.tien_ngan_hang
         ))
 
-        # ======================
-        # CÔNG NỢ KHÁCH
-        # ======================
+        # ===== CÔNG NỢ KH =====
         if payload.cong_no_khach:
             db.execute(text("""
                 INSERT INTO cong_no_khach_hang (ma_kh, so_du)
                 VALUES (:ma_kh, :so_no)
             """), [
-                {
-                    "ma_kh": x.ma_kh,
-                    "so_no": x.so_no
-                }
+                {"ma_kh": x.ma_kh, "so_no": x.so_no}
                 for x in payload.cong_no_khach
             ])
 
-        # ======================
-        # CÔNG NỢ NCC
-        # ======================
+        # ===== CÔNG NỢ NCC =====
         if payload.cong_no_ncc:
             db.execute(text("""
                 INSERT INTO cong_no_ncc (ma_ncc, so_du)
                 VALUES (:ma_ncc, :so_no)
             """), [
-                {
-                    "ma_ncc": x.ma_ncc,
-                    "so_no": x.so_no
-                }
+                {"ma_ncc": x.ma_ncc, "so_no": x.so_no}
                 for x in payload.cong_no_ncc
             ])
+
+        db.commit()
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(500, str(e))
 
     return {"status": "success"}
