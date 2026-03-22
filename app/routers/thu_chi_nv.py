@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from datetime import datetime
 
 from app.database import get_db
 from app.models import (
@@ -16,13 +17,42 @@ router = APIRouter(prefix="/thu-chi-nv", tags=["thu_chi_nhan_vien"])
 
 
 @router.post("/create")
-def create_thu_chi(data: ThuChiCreate,
-                   db: Session = Depends(get_db),
-                   user=Depends(get_current_user)):
+def create_thu_chi(
+    data: ThuChiCreate,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user)
+):
+
+    # =========================
+    # VALIDATE CHUNG
+    # =========================
+    if data.so_tien <= 0:
+        raise HTTPException(400, "Số tiền phải > 0")
+
+    VALID_GD = [
+        "nop_tien",
+        "khach_tra_no",
+        "chuyen_khoan",
+        "nop_them",
+        "tra_no_ncc",
+        "do_dau",
+        "sua_xe",
+        "chi_khac",
+        "thu_khac"
+    ]
+
+    if data.loai_giao_dich not in VALID_GD:
+        raise HTTPException(400, "Loại giao dịch không hợp lệ")
 
     with db.begin():
 
-        quy_ct = db.query(QuyCongTyChotNgay).with_for_update().first()
+        # =========================
+        # LOCK QUỸ
+        # =========================
+        quy_ct = db.query(QuyCongTyChotNgay)\
+            .with_for_update()\
+            .first()
+
         quy_nv = None
 
         if user.ma_nv != "admin":
@@ -32,7 +62,7 @@ def create_thu_chi(data: ThuChiCreate,
                 .first()
 
         if not quy_ct:
-            raise HTTPException(400, "Chưa có quỹ")
+            raise HTTPException(400, "Chưa có quỹ công ty")
 
         so_tien = data.so_tien
 
@@ -42,19 +72,22 @@ def create_thu_chi(data: ThuChiCreate,
         if user.ma_nv != "admin":
 
             if not quy_nv:
-                raise HTTPException(400, "Chưa có quỹ NV")
+                raise HTTPException(400, "Chưa có quỹ nhân viên")
 
+            # ===== NỘP TIỀN =====
             if data.loai_giao_dich == "nop_tien":
+
                 if quy_nv.so_du < so_tien:
                     raise HTTPException(400, "Không đủ tiền")
 
                 quy_nv.so_du -= so_tien
                 quy_ct.tien_mat += so_tien
 
+            # ===== KHÁCH TRẢ NỢ =====
             elif data.loai_giao_dich == "khach_tra_no":
 
                 if not data.ma_kh:
-                    raise HTTPException(400, "Thiếu khách hàng")
+                    raise HTTPException(400, "Thiếu mã khách")
 
                 kh = db.query(KhachHang)\
                     .filter_by(ma_kh=data.ma_kh)\
@@ -73,14 +106,16 @@ def create_thu_chi(data: ThuChiCreate,
                 else:
                     quy_ct.tien_ngan_hang += so_tien
 
-            elif data.loai == "chi":
+            # ===== CHI THƯỜNG =====
+            elif data.loai_giao_dich in ["do_dau", "sua_xe", "chi_khac"]:
 
                 if quy_nv.so_du < so_tien:
                     raise HTTPException(400, "Không đủ tiền")
 
                 quy_nv.so_du -= so_tien
 
-            elif data.loai == "thu":
+            # ===== THU KHÁC =====
+            elif data.loai_giao_dich == "thu_khac":
                 quy_nv.so_du += so_tien
 
         # =========================
@@ -88,6 +123,7 @@ def create_thu_chi(data: ThuChiCreate,
         # =========================
         else:
 
+            # ===== CHUYỂN KHOẢN =====
             if data.loai_giao_dich == "chuyen_khoan":
 
                 if quy_ct.tien_mat < so_tien:
@@ -96,6 +132,7 @@ def create_thu_chi(data: ThuChiCreate,
                 quy_ct.tien_mat -= so_tien
                 quy_ct.tien_ngan_hang += so_tien
 
+            # ===== NỘP THÊM =====
             elif data.loai_giao_dich == "nop_them":
 
                 if data.hinh_thuc == "tien_mat":
@@ -103,6 +140,7 @@ def create_thu_chi(data: ThuChiCreate,
                 else:
                     quy_ct.tien_ngan_hang += so_tien
 
+            # ===== TRẢ NCC =====
             elif data.loai_giao_dich == "tra_no_ncc":
 
                 if not data.ma_ncc:
@@ -117,7 +155,7 @@ def create_thu_chi(data: ThuChiCreate,
                     raise HTTPException(400, "Không có NCC")
 
                 if ncc.cong_no < so_tien:
-                    raise HTTPException(400, "Vượt nợ")
+                    raise HTTPException(400, "Vượt công nợ")
 
                 if data.hinh_thuc == "tien_mat":
                     if quy_ct.tien_mat < so_tien:
@@ -136,7 +174,7 @@ def create_thu_chi(data: ThuChiCreate,
         quy_ct.tong_quy = quy_ct.tien_mat + quy_ct.tien_ngan_hang
 
         # =========================
-        # LOG
+        # LOG (SẠCH DATA)
         # =========================
         db.add(ThuChi(
             ngay=datetime.now(),
@@ -146,10 +184,14 @@ def create_thu_chi(data: ThuChiCreate,
             loai=data.loai,
             hinh_thuc=data.hinh_thuc,
             loai_giao_dich=data.loai_giao_dich,
-            ma_kh=data.ma_kh,
-            ma_ncc=data.ma_ncc,
+            ma_kh=data.ma_kh if data.loai_giao_dich == "khach_tra_no" else None,
+            ma_ncc=data.ma_ncc if data.loai_giao_dich == "tra_no_ncc" else None,
             so_du_sau=quy_nv.so_du if quy_nv else 0,
             so_du_ct_sau=quy_ct.tong_quy
         ))
 
-    return {"msg": "OK"}
+    return {
+        "msg": "OK",
+        "so_du_nv": quy_nv.so_du if quy_nv else 0,
+        "tong_quy": quy_ct.tong_quy
+    }
