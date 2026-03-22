@@ -174,3 +174,28 @@ def save_dau_ky(
         raise HTTPException(500, str(e))
 
     return {"status": "success"}
+
+# get đầu kì:
+@router.get("/dau-ky")
+def get_dau_ky(db: Session = Depends(get_db)):
+
+    ton_kho = db.query(TonKhoChotNgay).all()
+    quy_nv = db.query(QuyNhanVienChotNgay).all()
+    quy_ct = db.query(QuyCongTyChotNgay).first()
+
+    return {
+        "ton_kho": [
+            {"ma_kho": x.ma_kho, "ma_sp": x.ma_sp, "so_luong": float(x.so_luong)}
+            for x in ton_kho
+        ],
+        "quy_nhan_vien": [
+            {"ma_nv": x.ma_nv, "so_du": float(x.so_du)}
+            for x in quy_nv
+        ],
+        "quy_cong_ty": {
+            "tien_mat": float(quy_ct.tien_mat) if quy_ct else 0,
+            "tien_ngan_hang": float(quy_ct.tien_ngan_hang) if quy_ct else 0
+        },
+        "cong_no_khach": [],
+        "cong_no_ncc": []
+    }
