@@ -3,7 +3,8 @@ from typing import List, Optional
 from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
-
+from pydantic import field_validator, model_validator
+from typing import Optional, Literal
 
 # =====================================================
 # 🔥 ĐẦU KỲ (GIỮ FILE CŨ + FIX)
@@ -201,14 +202,62 @@ class HoaDonBanResponse(BaseModel):
 # THU CHI
 # =====================================================
 
+
+
+
 class ThuChiCreate(BaseModel):
-    loai: str
+    # ===== CORE =====
+    loai: Literal["thu", "chi"]
     loai_giao_dich: str
     so_tien: float
-    hinh_thuc: str
+    hinh_thuc: Literal["tien_mat", "chuyen_khoan"]
 
+    # ===== OPTIONAL =====
     ma_kh: Optional[str] = None
     ma_ncc: Optional[str] = None
+
+    # =========================
+    # VALIDATE SỐ TIỀN
+    # =========================
+    @field_validator("so_tien")
+    @classmethod
+    def validate_so_tien(cls, v):
+        if v <= 0:
+            raise ValueError("Số tiền phải > 0")
+        return v
+
+    # =========================
+    # VALIDATE LOGIC NGHIỆP VỤ
+    # =========================
+    @model_validator(mode="after")
+    def validate_logic(self):
+
+        # ===== KHÁCH TRẢ NỢ =====
+        if self.loai_giao_dich == "khach_tra_no":
+            if not self.ma_kh:
+                raise ValueError("Thiếu mã khách hàng")
+
+        # ===== TRẢ NCC =====
+        if self.loai_giao_dich == "tra_no_ncc":
+            if not self.ma_ncc:
+                raise ValueError("Thiếu mã NCC")
+
+        # ===== NỘP TIỀN NV =====
+        if self.loai_giao_dich == "nop_tien":
+            if self.loai != "chi":
+                raise ValueError("Nộp tiền phải là chi")
+
+        # ===== CHUYỂN KHOẢN ADMIN =====
+        if self.loai_giao_dich == "chuyen_khoan":
+            if self.hinh_thuc != "tien_mat":
+                raise ValueError("Chuyển khoản phải xuất phát từ tiền mặt")
+
+        # ===== NỘP THÊM =====
+        if self.loai_giao_dich == "nop_them":
+            if self.loai != "thu":
+                raise ValueError("Nộp thêm phải là thu")
+
+        return self
 
 
 class ThuChiResponse(ThuChiCreate):
