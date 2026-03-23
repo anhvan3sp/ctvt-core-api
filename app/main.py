@@ -11,8 +11,12 @@ from app.routers import inventory
 from app.routers import thu_chi_nv
 from app.routers import system
 from app.routers import dashboard
+from app.routers import ai
 
 app = FastAPI()
+
+
+
 
 # ==============================
 # CORS CONFIG (mở full để test)
@@ -24,6 +28,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.include_router(ai.router)
 app.include_router(dashboard.router)
 app.include_router(thu_chi_nv.router)
 app.include_router(system.router)
