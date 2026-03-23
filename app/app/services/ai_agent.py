@@ -2,8 +2,10 @@ from openai import OpenAI
 import json
 import os
 
-client = OpenAI(api_key="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")
 
+client = OpenAI(
+    api_key=os.getenv("OPENAI_API_KEY")
+)
 
 
 SYSTEM_PROMPT = """
