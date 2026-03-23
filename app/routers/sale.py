@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import func, text
+from sqlalchemy import text
+from decimal import Decimal
 
 from app.database import get_db
 from app.schemas import HoaDonBanCreate
@@ -18,29 +19,36 @@ from app.models import (
 router = APIRouter(prefix="/sale", tags=["Sale"])
 
 
+def to_decimal(val):
+    try:
+        return Decimal(str(val or 0))
+    except:
+        raise HTTPException(400, "Tiền không hợp lệ")
+
+
 @router.post("/")
 def create_sale(
     data: HoaDonBanCreate,
     db: Session = Depends(get_db),
-    user = Depends(require_roles(["admin", "nv_dac_biet"]))
+    user=Depends(require_roles(["admin", "nv_dac_biet"]))
 ):
 
-    # =========================
-    # CHECK QUYỀN KHO
-    # =========================
-    if user.vai_tro != "admin":
-        row = db.execute(text("""
-            SELECT 1 FROM nhan_vien_kho
-            WHERE ma_nv = :ma_nv AND ma_kho = :ma_kho
-        """), {
-            "ma_nv": user.ma_nv,
-            "ma_kho": data.ma_kho
-        }).fetchone()
+    try:
 
-        if not row:
-            raise HTTPException(403, "Khong duoc phep dung kho")
+        # =========================
+        # CHECK QUYỀN KHO
+        # =========================
+        if user.vai_tro != "admin":
+            row = db.execute(text("""
+                SELECT 1 FROM nhan_vien_kho
+                WHERE ma_nv = :ma_nv AND ma_kho = :ma_kho
+            """), {
+                "ma_nv": user.ma_nv,
+                "ma_kho": data.ma_kho
+            }).fetchone()
 
-    with db.begin():
+            if not row:
+                raise HTTPException(403, "Không được phép dùng kho")
 
         # =========================
         # LOCK QUỸ
@@ -65,7 +73,7 @@ def create_sale(
         if not quy_nv or not quy_ct or not kh:
             raise HTTPException(400, "Thiếu dữ liệu")
 
-        tong_tien = 0
+        tong_tien = Decimal("0")
 
         # =========================
         # XỬ LÝ KHO
@@ -90,10 +98,10 @@ def create_sale(
                 ma_nv=user.ma_nv
             ))
 
-            tong_tien += item.so_luong * item.don_gia
+            tong_tien += Decimal(item.so_luong) * Decimal(item.don_gia)
 
-        tien_mat = data.tien_mat or 0
-        tien_ck = data.tien_ck or 0
+        tien_mat = to_decimal(data.tien_mat)
+        tien_ck = to_decimal(data.tien_ck)
 
         if tien_mat + tien_ck > tong_tien:
             raise HTTPException(400, "Tiền lớn hơn tổng tiền")
@@ -101,15 +109,15 @@ def create_sale(
         # =========================
         # TIỀN MẶT → NV
         # =========================
-        quy_nv.so_du += tien_mat
+        quy_nv.so_du = (quy_nv.so_du or 0) + tien_mat
 
         # =========================
         # CK → CÔNG TY
         # =========================
-        quy_ct.tien_ngan_hang += tien_ck
+        quy_ct.tien_ngan_hang = (quy_ct.tien_ngan_hang or 0) + tien_ck
 
         # =========================
-        # TÍNH CÔNG NỢ
+        # CÔNG NỢ
         # =========================
         no_moi = tong_tien - tien_mat - tien_ck
 
@@ -117,9 +125,9 @@ def create_sale(
             kh.cong_no = (kh.cong_no or 0) + no_moi
 
         # =========================
-        # UPDATE TỔNG QUỸ
+        # UPDATE QUỸ
         # =========================
-        quy_ct.tong_quy = quy_ct.tien_mat + quy_ct.tien_ngan_hang
+        quy_ct.tong_quy = (quy_ct.tien_mat or 0) + (quy_ct.tien_ngan_hang or 0)
 
         # =========================
         # LOG TIỀN
@@ -144,8 +152,21 @@ def create_sale(
             tong_tien=tong_tien
         ))
 
-    return {
-        "message": "OK",
-        "tong_tien": tong_tien,
-        "no_moi": no_moi
-    }
+        # =========================
+        # COMMIT
+        # =========================
+        db.commit()
+
+        return {
+            "message": "OK",
+            "tong_tien": float(tong_tien),
+            "no_moi": float(no_moi)
+        }
+
+    except HTTPException as e:
+        db.rollback()
+        raise e
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(500, str(e))
