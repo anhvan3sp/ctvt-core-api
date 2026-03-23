@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import func, text
+from sqlalchemy import text
+from decimal import Decimal
+from datetime import datetime
 
 from app.database import get_db
 from app.schemas import HoaDonNhapCreate
@@ -18,18 +20,19 @@ from app.models import (
 router = APIRouter(prefix="/purchase", tags=["Purchase"])
 
 
+def to_decimal(val):
+    return Decimal(str(val or 0))
+
+
 @router.post("/")
 def create_purchase(
     data: HoaDonNhapCreate,
     db: Session = Depends(get_db),
-    user = Depends(require_roles(["admin", "nv_dac_biet"]))
+    user=Depends(require_roles(["admin", "nv_dac_biet"]))
 ):
 
-    with db.begin():
+    try:
 
-        # =========================
-        # LOCK QUỸ
-        # =========================
         quy_nv = db.query(QuyNhanVienChotNgay)\
             .filter_by(ma_nv=user.ma_nv)\
             .with_for_update()\
@@ -47,20 +50,17 @@ def create_purchase(
         if not quy_ct or not ncc:
             raise HTTPException(400, "Thiếu dữ liệu")
 
-        tong_tien = 0
+        tong_tien = Decimal("0")
 
-        # =========================
-        # XỬ LÝ KHO
-        # =========================
+        # ===== KHO =====
         for item in data.items:
-
             ton = db.query(TonKhoChotNgay)\
                 .filter_by(ma_kho=data.ma_kho, ma_sp=item.ma_sp)\
                 .with_for_update()\
                 .first()
 
             if not ton:
-                raise HTTPException(400, f"Chưa có tồn kho {item.ma_sp}")
+                raise HTTPException(400, "Chưa có tồn kho")
 
             ton.so_luong += item.so_luong
 
@@ -69,37 +69,33 @@ def create_purchase(
                 ma_sp=item.ma_sp,
                 loai="nhap",
                 so_luong=item.so_luong,
-                ma_nv=user.ma_nv
+                ma_nv=user.ma_nv,
+                ngay=datetime.now()
             ))
 
-            tong_tien += item.so_luong * item.don_gia
+            tong_tien += Decimal(item.so_luong) * Decimal(item.don_gia)
 
-        tien_mat = data.tien_mat or 0
-        tien_ck = data.tien_ck or 0
+        tien_mat = to_decimal(data.tien_mat)
+        tien_ck = to_decimal(data.tien_ck)
 
         if tien_mat + tien_ck > tong_tien:
-            raise HTTPException(400, "Tiền lớn hơn tổng")
+            raise HTTPException(400, "Tiền vượt tổng")
 
         no_moi = tong_tien - tien_mat - tien_ck
 
-        # =========================
-        # CASE: ADMIN
-        # =========================
+        # ===== TIỀN =====
         if user.ma_nv == "admin":
 
             if tien_mat > 0:
                 if quy_ct.tien_mat < tien_mat:
-                    raise HTTPException(400, "Không đủ tiền mặt")
+                    raise HTTPException(400, "Thiếu tiền mặt")
                 quy_ct.tien_mat -= tien_mat
 
             if tien_ck > 0:
                 if quy_ct.tien_ngan_hang < tien_ck:
-                    raise HTTPException(400, "Không đủ tiền CK")
+                    raise HTTPException(400, "Thiếu CK")
                 quy_ct.tien_ngan_hang -= tien_ck
 
-        # =========================
-        # CASE: NHÂN VIÊN
-        # =========================
         else:
 
             if not quy_nv:
@@ -110,42 +106,58 @@ def create_purchase(
 
             quy_nv.so_du -= (tien_mat + tien_ck)
 
-        # =========================
-        # CÔNG NỢ NCC
-        # =========================
+        # ===== CÔNG NỢ =====
         if no_moi > 0:
             ncc.cong_no = (ncc.cong_no or 0) + no_moi
 
-        # =========================
-        # UPDATE TỔNG QUỸ
-        # =========================
-        quy_ct.tong_quy = quy_ct.tien_mat + quy_ct.tien_ngan_hang
+        quy_ct.tong_quy = (quy_ct.tien_mat or 0) + (quy_ct.tien_ngan_hang or 0)
 
-        # =========================
-        # LOG TIỀN
-        # =========================
-        db.add(ThuChi(
-            ma_nv=user.ma_nv,
-            loai="chi",
-            loai_giao_dich="nhap_hang",
-            so_tien=tong_tien,
-            hinh_thuc="tong_hop",
-            so_du_sau=quy_nv.so_du if quy_nv else 0,
-            so_du_ct_sau=quy_ct.tong_quy
-        ))
+        # ===== LOG TIỀN (CHUẨN) =====
+        if tien_mat > 0:
+            db.add(ThuChi(
+                ngay=datetime.now(),
+                doi_tuong="cong_ty",
+                ma_nv=user.ma_nv,
+                so_tien=tien_mat,
+                loai="chi",
+                hinh_thuc="tien_mat",
+                loai_giao_dich="nhap_hang",
+                so_du_ct_sau=quy_ct.tong_quy
+            ))
 
-        # =========================
-        # HÓA ĐƠN
-        # =========================
+        if tien_ck > 0:
+            db.add(ThuChi(
+                ngay=datetime.now(),
+                doi_tuong="cong_ty",
+                ma_nv=user.ma_nv,
+                so_tien=tien_ck,
+                loai="chi",
+                hinh_thuc="chuyen_khoan",
+                loai_giao_dich="nhap_hang",
+                so_du_ct_sau=quy_ct.tong_quy
+            ))
+
+        # ===== HÓA ĐƠN =====
         db.add(HoaDonNhap(
+            ngay=datetime.now(),
             ma_nv=user.ma_nv,
             ma_ncc=data.ma_ncc,
             ma_kho=data.ma_kho,
             tong_tien=tong_tien
         ))
 
-    return {
-        "message": "Nhập hàng OK",
-        "tong_tien": tong_tien,
-        "no_moi": no_moi
-    }
+        db.commit()
+
+        return {
+            "message": "OK",
+            "tong_tien": float(tong_tien),
+            "no_moi": float(no_moi)
+        }
+
+    except HTTPException as e:
+        db.rollback()
+        raise e
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(500, str(e))
