@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.services.ai_agent import ask_ai
+from app.ai_agent import ask_ai
 
 router = APIRouter()
 
