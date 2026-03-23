@@ -6,7 +6,7 @@ import os
 client = OpenAI(
     api_key=os.getenv("OPENAI_API_KEY")
 )
-
+print("KEY:", os.getenv("OPENAI_API_KEY"))
 
 SYSTEM_PROMPT = """
 Bạn là AI ERP GAS.
