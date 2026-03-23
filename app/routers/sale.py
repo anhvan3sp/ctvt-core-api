@@ -97,7 +97,7 @@ def create_sale(
                 loai="xuat",
                 so_luong=item.so_luong,
                 ma_nv=user.ma_nv,
-                ngay=datetime.now()   # 🔥 thêm ngày
+                ngay=datetime.now()
             ))
 
             tong_tien += Decimal(item.so_luong) * Decimal(item.don_gia)
@@ -109,13 +109,9 @@ def create_sale(
             raise HTTPException(400, "Tiền lớn hơn tổng tiền")
 
         # =========================
-        # TIỀN MẶT → NV
+        # TIỀN
         # =========================
         quy_nv.so_du = (quy_nv.so_du or 0) + tien_mat
-
-        # =========================
-        # CK → CÔNG TY
-        # =========================
         quy_ct.tien_ngan_hang = (quy_ct.tien_ngan_hang or 0) + tien_ck
 
         # =========================
@@ -132,33 +128,49 @@ def create_sale(
         quy_ct.tong_quy = (quy_ct.tien_mat or 0) + (quy_ct.tien_ngan_hang or 0)
 
         # =========================
-        # LOG TIỀN
+        # LOG TIỀN (FIX CHUẨN)
         # =========================
-        db.add(ThuChi(
-            ngay=datetime.now(),   # 🔥 FIX LỖI CHÍNH
-            ma_nv=user.ma_nv,
-            loai="thu",
-            loai_giao_dich="ban_hang",
-            so_tien=tong_tien,
-            hinh_thuc="tong_hop",
-            so_du_sau=quy_nv.so_du,
-            so_du_ct_sau=quy_ct.tong_quy
-        ))
+        if tien_mat > 0:
+            db.add(ThuChi(
+                ngay=datetime.now(),
+                doi_tuong="nhan_vien",   # 🔥 BẮT BUỘC
+                ma_nv=user.ma_nv,
+                so_tien=tien_mat,
+                loai="thu",
+                hinh_thuc="tien_mat",
+                loai_giao_dich="ban_hang",
+                so_du_sau=quy_nv.so_du,
+                so_du_ct_sau=quy_ct.tong_quy
+            ))
+
+        if tien_ck > 0:
+            db.add(ThuChi(
+                ngay=datetime.now(),
+                doi_tuong="cong_ty",   # 🔥 BẮT BUỘC
+                ma_nv=user.ma_nv,
+                so_tien=tien_ck,
+                loai="thu",
+                hinh_thuc="chuyen_khoan",
+                loai_giao_dich="ban_hang",
+                so_du_sau=quy_nv.so_du,
+                so_du_ct_sau=quy_ct.tong_quy
+            ))
 
         # =========================
         # TẠO HÓA ĐƠN
         # =========================
         db.add(HoaDonBan(
-            ngay=datetime.now(),   # 🔥 FIX LỖI CHÍNH
+            ngay=datetime.now(),
             ma_nv=user.ma_nv,
             ma_kh=data.ma_kh,
             ma_kho=data.ma_kho,
-            tong_tien=tong_tien
+            tong_tien=tong_tien,
+            tien_mat=tien_mat,
+            tien_ck=tien_ck,
+            tong_thanh_toan=tien_mat + tien_ck,
+            no_lai=no_moi
         ))
 
-        # =========================
-        # COMMIT
-        # =========================
         db.commit()
 
         return {
