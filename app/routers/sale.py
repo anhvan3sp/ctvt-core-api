@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from decimal import Decimal
+from datetime import datetime
 
 from app.database import get_db
 from app.schemas import HoaDonBanCreate
@@ -95,7 +96,8 @@ def create_sale(
                 ma_sp=item.ma_sp,
                 loai="xuat",
                 so_luong=item.so_luong,
-                ma_nv=user.ma_nv
+                ma_nv=user.ma_nv,
+                ngay=datetime.now()   # 🔥 thêm ngày
             ))
 
             tong_tien += Decimal(item.so_luong) * Decimal(item.don_gia)
@@ -133,6 +135,7 @@ def create_sale(
         # LOG TIỀN
         # =========================
         db.add(ThuChi(
+            ngay=datetime.now(),   # 🔥 FIX LỖI CHÍNH
             ma_nv=user.ma_nv,
             loai="thu",
             loai_giao_dich="ban_hang",
@@ -146,6 +149,7 @@ def create_sale(
         # TẠO HÓA ĐƠN
         # =========================
         db.add(HoaDonBan(
+            ngay=datetime.now(),   # 🔥 FIX LỖI CHÍNH
             ma_nv=user.ma_nv,
             ma_kh=data.ma_kh,
             ma_kho=data.ma_kho,
