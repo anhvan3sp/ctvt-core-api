@@ -144,6 +144,8 @@ class HoaDonBan(Base):
     tong_thanh_toan = Column(DECIMAL(18,2))
     no_lai = Column(DECIMAL(18,2))
 
+    idempotency_key = Column(String(50), unique=True)  # ✅ THÊM
+
     trang_thai = Column(Enum("nhap","xac_nhan","chot","huy"))
     ngay_tao = Column(DateTime, default=datetime.utcnow)
 
