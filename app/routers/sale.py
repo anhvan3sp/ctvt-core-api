@@ -38,7 +38,20 @@ def create_sale(
     try:
 
         # =========================
-        # CHECK TRÙNG (🔥 NEW)
+        # IDEMPOTENCY (🔥 NEW)
+        # =========================
+        if getattr(data, "idempotency_key", None):
+            existed = db.execute(text("""
+                SELECT id FROM hoa_don_ban
+                WHERE idempotency_key = :key
+                LIMIT 1
+            """), {"key": data.idempotency_key}).fetchone()
+
+            if existed:
+                return {"message": "OK (duplicate ignored)"}
+
+        # =========================
+        # CHECK TRÙNG (business)
         # =========================
         existing = db.execute(text("""
             SELECT id FROM hoa_don_ban
@@ -203,7 +216,9 @@ def create_sale(
             tien_mat=tien_mat,
             tien_ck=tien_ck,
             tong_thanh_toan=tong_thanh_toan,
-            no_lai=no_moi
+            no_lai=no_moi,
+            idempotency_key=getattr(data, "idempotency_key", None),
+            trang_thai="xac_nhan"
         )
 
         db.add(hoa_don)
