@@ -273,3 +273,13 @@ class CongNoNCC(Base):
     ma_ncc = Column(String(50), unique=True, nullable=False)
 
     so_du = Column(DECIMAL(18,2), default=0)
+
+class CongNoKhachHangLog(Base):
+    __tablename__ = "cong_no_khach_hang_log"
+
+    id = Column(Integer, primary_key=True)
+    ma_kh = Column(String(50))
+    ngay = Column(DateTime)
+    phat_sinh = Column(DECIMAL(18,2))
+    loai = Column(String(50))
+    created_at = Column(DateTime, default=datetime.utcnow)
