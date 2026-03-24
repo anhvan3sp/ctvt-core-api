@@ -249,3 +249,15 @@ class TonKhoChotNgay(Base):
     ma_sp = Column(String(50))
 
     so_luong = Column(DECIMAL(12,2))
+
+# ======================
+# CÔNG NỢ KHÁCH HÀNG
+# ======================
+class CongNoKhachHang(Base):
+    __tablename__ = "cong_no_khach_hang"
+
+    id = Column(Integer, primary_key=True)
+
+    ma_kh = Column(String(50), unique=True, nullable=False)
+
+    so_du = Column(DECIMAL(18,2), default=0)
