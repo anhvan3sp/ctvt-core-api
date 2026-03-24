@@ -23,7 +23,7 @@ router = APIRouter(prefix="/activity", tags=["Activity"])
 
 
 # =========================
-# LIST ALL TRONG NGÀY
+# LIST TODAY
 # =========================
 @router.get("/today")
 def list_today(
@@ -49,7 +49,7 @@ def list_today(
 
 
 # =========================
-# HUỶ SALE (CHUẨN)
+# CANCEL SALE
 # =========================
 @router.post("/cancel/sale/{id}")
 def cancel_sale(
@@ -59,7 +59,7 @@ def cancel_sale(
 ):
     try:
 
-        # ===== LOCK HÓA ĐƠN =====
+        # LOCK hóa đơn
         hd = db.query(HoaDonBan)\
             .filter_by(id=id)\
             .with_for_update()\
@@ -71,13 +71,10 @@ def cancel_sale(
         if hd.ma_nv != user.ma_nv and user.ma_nv != "admin":
             raise HTTPException(403, "Không có quyền")
 
-        # ===== CHECK ĐÃ HUỶ =====
         if hd.trang_thai == "huy":
-            raise HTTPException(400, "Hoá đơn đã huỷ")
+            raise HTTPException(400, "Đã huỷ rồi")
 
-        # =========================
-        # 1. ĐẢO KHO (🔥 QUAN TRỌNG)
-        # =========================
+        # ===== ĐẢO KHO =====
         items = db.query(HoaDonBanChiTiet)\
             .filter_by(id_hoa_don=hd.id)\
             .all()
@@ -101,9 +98,7 @@ def cancel_sale(
                 id_tham_chieu=hd.id
             ))
 
-        # =========================
-        # 2. ĐẢO TIỀN
-        # =========================
+        # ===== QUỸ =====
         quy_nv = db.query(QuyNhanVienChotNgay)\
             .filter_by(ma_nv=hd.ma_nv)\
             .with_for_update()\
@@ -119,9 +114,7 @@ def cancel_sale(
         if hd.tien_ck:
             quy_ct.tien_ngan_hang -= hd.tien_ck
 
-        # =========================
-        # 3. ĐẢO CÔNG NỢ
-        # =========================
+        # ===== CÔNG NỢ =====
         cn = db.query(CongNoKhachHang)\
             .filter_by(ma_kh=hd.ma_kh)\
             .with_for_update()\
@@ -138,9 +131,7 @@ def cancel_sale(
             ref_id=hd.id
         ))
 
-        # =========================
-        # 4. LOG THU CHI
-        # =========================
+        # ===== THU CHI =====
         if hd.tien_mat:
             db.add(ThuChi(
                 ngay=datetime.now(),
@@ -163,14 +154,12 @@ def cancel_sale(
                 loai_giao_dich="huy_ban_hang"
             ))
 
-        # =========================
-        # 5. UPDATE STATUS
-        # =========================
+        # ===== UPDATE =====
         hd.trang_thai = "huy"
 
         db.commit()
 
-        return {"message": "Đã huỷ sale"}
+        return {"message": "OK"}
 
     except Exception as e:
         db.rollback()
