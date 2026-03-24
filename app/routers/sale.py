@@ -16,7 +16,7 @@ from app.models import (
     ThuChi,
     KhachHang,
     CongNoKhachHang,
-    CongNoKhachHangLog   # 🔥 THÊM
+    CongNoKhachHangLog
 )
 
 router = APIRouter(prefix="/sale", tags=["Sale"])
@@ -36,6 +36,26 @@ def create_sale(
     user=Depends(require_roles(["admin", "nv_dac_biet"]))
 ):
     try:
+
+        # =========================
+        # CHECK TRÙNG (🔥 NEW)
+        # =========================
+        existing = db.execute(text("""
+            SELECT id FROM hoa_don_ban
+            WHERE DATE(ngay) = :ngay
+              AND ma_nv = :ma_nv
+              AND ma_kh = :ma_kh
+              AND tong_tien = :tong_tien
+            LIMIT 1
+        """), {
+            "ngay": datetime.now().date(),
+            "ma_nv": user.ma_nv,
+            "ma_kh": data.ma_kh,
+            "tong_tien": data.tong_tien if hasattr(data, "tong_tien") else 0
+        }).fetchone()
+
+        if existing and not getattr(data, "force", False):
+            raise HTTPException(409, "HOA_DON_TRUNG")
 
         # =========================
         # CHECK QUYỀN KHO
@@ -84,7 +104,6 @@ def create_sale(
         tong_tien = Decimal("0")
 
         for item in data.items:
-
             sl = Decimal(str(item.so_luong))
             gia = Decimal(str(item.don_gia))
 
@@ -109,16 +128,13 @@ def create_sale(
 
             tong_tien += sl * gia
 
-        # =========================
-        # TIỀN
-        # =========================
         tien_mat = to_decimal(data.tien_mat)
         tien_ck = to_decimal(data.tien_ck)
 
         tong_thanh_toan = tien_mat + tien_ck
 
         # =========================
-        # UPDATE QUỸ
+        # QUỸ
         # =========================
         if tien_mat > 0:
             quy_nv.so_du += tien_mat
@@ -127,7 +143,7 @@ def create_sale(
             quy_ct.tien_ngan_hang += tien_ck
 
         # =========================
-        # CÔNG NỢ (SNAPSHOT + LOG)
+        # CÔNG NỢ
         # =========================
         no_moi = tong_tien - tong_thanh_toan
 
@@ -137,17 +153,12 @@ def create_sale(
             .first()
 
         if not cn:
-            cn = CongNoKhachHang(
-                ma_kh=data.ma_kh,
-                so_du=Decimal("0")
-            )
+            cn = CongNoKhachHang(ma_kh=data.ma_kh, so_du=Decimal("0"))
             db.add(cn)
             db.flush()
 
-        # ===== UPDATE SNAPSHOT =====
-        cn.so_du = (cn.so_du or Decimal("0")) + no_moi
+        cn.so_du += no_moi
 
-        # ===== LOG =====
         db.add(CongNoKhachHangLog(
             ma_kh=data.ma_kh,
             ngay=datetime.now(),
@@ -156,7 +167,7 @@ def create_sale(
         ))
 
         # =========================
-        # LOG THU CHI
+        # THU CHI
         # =========================
         if tien_mat > 0:
             db.add(ThuChi(
@@ -166,9 +177,7 @@ def create_sale(
                 so_tien=tien_mat,
                 loai="thu",
                 hinh_thuc="tien_mat",
-                loai_giao_dich="ban_hang",
-                so_du_sau=quy_nv.so_du,
-                ma_kh=data.ma_kh
+                loai_giao_dich="ban_hang"
             ))
 
         if tien_ck > 0:
@@ -179,9 +188,7 @@ def create_sale(
                 so_tien=tien_ck,
                 loai="thu",
                 hinh_thuc="chuyen_khoan",
-                loai_giao_dich="ban_hang",
-                so_du_ct_sau=quy_ct.tien_ngan_hang,
-                ma_kh=data.ma_kh
+                loai_giao_dich="ban_hang"
             ))
 
         # =========================
@@ -201,18 +208,9 @@ def create_sale(
 
         db.add(hoa_don)
 
-        # =========================
-        # COMMIT
-        # =========================
         db.commit()
 
-        return {
-            "message": "OK",
-            "tong_tien": float(tong_tien),
-            "da_tra": float(tong_thanh_toan),
-            "no_lai": float(no_moi),
-            "cong_no_sau": float(cn.so_du)
-        }
+        return {"message": "OK"}
 
     except HTTPException as e:
         db.rollback()
