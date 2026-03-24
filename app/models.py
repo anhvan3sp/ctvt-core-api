@@ -282,4 +282,6 @@ class CongNoKhachHangLog(Base):
     ngay = Column(DateTime)
     phat_sinh = Column(DECIMAL(18,2))
     loai = Column(String(50))
+    ref_id = Column(Integer)  # ✅ THÊM DÒNG NÀY
     created_at = Column(DateTime, default=datetime.utcnow)
+
