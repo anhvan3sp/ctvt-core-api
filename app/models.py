@@ -261,3 +261,15 @@ class CongNoKhachHang(Base):
     ma_kh = Column(String(50), unique=True, nullable=False)
 
     so_du = Column(DECIMAL(18,2), default=0)
+
+# ======================
+# CÔNG NỢ NHÀ CUNG CẤP
+# ======================
+class CongNoNCC(Base):
+    __tablename__ = "cong_no_ncc"
+
+    id = Column(Integer, primary_key=True)
+
+    ma_ncc = Column(String(50), unique=True, nullable=False)
+
+    so_du = Column(DECIMAL(18,2), default=0)
