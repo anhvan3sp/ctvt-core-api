@@ -15,7 +15,8 @@ from app.models import (
     QuyCongTyChotNgay,
     ThuChi,
     KhachHang,
-    CongNoKhachHang
+    CongNoKhachHang,
+    CongNoKhachHangLog   # 🔥 THÊM
 )
 
 router = APIRouter(prefix="/sale", tags=["Sale"])
@@ -126,7 +127,7 @@ def create_sale(
             quy_ct.tien_ngan_hang += tien_ck
 
         # =========================
-        # CÔNG NỢ (AUTO CREATE + SAFE)
+        # CÔNG NỢ (SNAPSHOT + LOG)
         # =========================
         no_moi = tong_tien - tong_thanh_toan
 
@@ -141,10 +142,18 @@ def create_sale(
                 so_du=Decimal("0")
             )
             db.add(cn)
-            db.flush()  # 🔥 đảm bảo insert ngay trong transaction
+            db.flush()
 
-        # 🔥 1 dòng xử lý tất cả case (thiếu / đủ / dư)
-        cn.so_du += no_moi
+        # ===== UPDATE SNAPSHOT =====
+        cn.so_du = (cn.so_du or Decimal("0")) + no_moi
+
+        # ===== LOG =====
+        db.add(CongNoKhachHangLog(
+            ma_kh=data.ma_kh,
+            ngay=datetime.now(),
+            phat_sinh=no_moi,
+            loai="ban_hang"
+        ))
 
         # =========================
         # LOG THU CHI
