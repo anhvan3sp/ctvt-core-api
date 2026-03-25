@@ -204,27 +204,19 @@ class HoaDonBanResponse(BaseModel):
 # THU CHI
 # =====================================================
 
-
-
-
 class ThuChiCreate(BaseModel):
-    # ===== CORE =====
     loai: Literal["thu", "chi"]
     loai_giao_dich: str
     so_tien: float
     hinh_thuc: Literal["tien_mat", "chuyen_khoan"]
 
-    # ===== OPTIONAL =====
+    # giữ nhưng không dùng
     ma_kh: Optional[str] = None
     ma_ncc: Optional[str] = None
-    noi_dung: Optional[str] = None   # ✅ thêm
 
-    # 🔥 NEW (KHÔNG PHÁ)
+    noi_dung: Optional[str] = None
     idempotency_key: Optional[str] = None
 
-    # =========================
-    # VALIDATE SỐ TIỀN
-    # =========================
     @field_validator("so_tien")
     @classmethod
     def validate_so_tien(cls, v):
@@ -232,38 +224,22 @@ class ThuChiCreate(BaseModel):
             raise ValueError("Số tiền phải > 0")
         return v
 
-    # =========================
-    # VALIDATE LOGIC NGHIỆP VỤ
-    # =========================
     @model_validator(mode="after")
     def validate_logic(self):
 
-        # ===== KHÁCH TRẢ NỢ =====
-        if self.loai_giao_dich == "khach_tra_no":
-            if not self.ma_kh:
-                raise ValueError("Thiếu mã khách hàng")
-
-        # ===== TRẢ NCC =====
-        if self.loai_giao_dich == "tra_no_ncc":
-            if not self.ma_ncc:
-                raise ValueError("Thiếu mã NCC")
-
-        # ===== NỘP TIỀN NV =====
+        # chỉ giữ rule đúng
         if self.loai_giao_dich == "nop_tien":
             if self.loai != "chi":
                 raise ValueError("Nộp tiền phải là chi")
 
-        # ===== CHUYỂN KHOẢN ADMIN =====
-        if self.loai_giao_dich == "chuyen_khoan":
-            if self.hinh_thuc != "tien_mat":
-                raise ValueError("Chuyển khoản phải xuất phát từ tiền mặt")
-
-        # ===== NỘP THÊM =====
         if self.loai_giao_dich == "nop_them":
             if self.loai != "thu":
                 raise ValueError("Nộp thêm phải là thu")
 
         return self
+
+
+
 
 
 class ThuChiResponse(ThuChiCreate):
