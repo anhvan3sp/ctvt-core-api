@@ -217,6 +217,10 @@ class ThuChiCreate(BaseModel):
     # ===== OPTIONAL =====
     ma_kh: Optional[str] = None
     ma_ncc: Optional[str] = None
+    noi_dung: Optional[str] = None   # ✅ thêm
+
+    # 🔥 NEW (KHÔNG PHÁ)
+    idempotency_key: Optional[str] = None
 
     # =========================
     # VALIDATE SỐ TIỀN
