@@ -17,19 +17,25 @@ from app.schemas import ThuChiCreate
 router = APIRouter(prefix="/thu-chi-nv", tags=["thu_chi_nhan_vien"])
 
 
-# ====== CONST ======
+# ====== CONST (SYNC WITH DB) ======
 VALID_GD = {
+    "tien_do",
+    "nhap_hang",
+    "ban_hang",
+    "do_dau",
     "nop_tien",
     "khach_tra_no",
-    "do_dau",
-    "sua_xe",
-    "chi_khac",
-    "thu_khac",
     "tra_no_ncc",
+    "chuyen_khoan",
+    "nop_them",
+    "chi_khac",
+    "nop_them_quy",
+    "chuyen_tien_vao_NH",
+    "thu_khac",
 
-    # ADMIN
-    "nop_tien_cong_ty",
-    "chuyen_tien_vao_NH"
+    # bổ sung FE đang dùng
+    "sua_xe",
+    "dang_kiem"
 }
 
 
@@ -52,7 +58,7 @@ def create_thu_chi(
         # VALIDATE
         # =========================
         if data.loai_giao_dich not in VALID_GD:
-            raise HTTPException(400, "Loại giao dịch không hợp lệ")
+            raise HTTPException(400, f"Loại giao dịch không hợp lệ: {data.loai_giao_dich}")
 
         so_tien = to_decimal(data.so_tien)
 
@@ -113,22 +119,24 @@ def create_thu_chi(
                 else:
                     quy_ct.tien_ngan_hang += so_tien
 
-            elif data.loai_giao_dich in ["do_dau", "sua_xe", "chi_khac"]:
+            elif data.loai_giao_dich in ["do_dau", "sua_xe", "dang_kiem", "chi_khac", "tien_do"]:
 
                 if quy_nv.so_du < so_tien:
                     raise HTTPException(400, "Không đủ tiền")
 
                 quy_nv.so_du -= so_tien
 
-            elif data.loai_giao_dich == "thu_khac":
+            elif data.loai_giao_dich in ["thu_khac", "nop_them"]:
                 quy_nv.so_du += so_tien
+
+            else:
+                raise HTTPException(400, f"NV không xử lý loại này: {data.loai_giao_dich}")
 
         # =========================
         # ===== ADMIN =====
         # =========================
         else:
 
-            # ===== NỘP TIỀN CÔNG TY =====
             if data.loai_giao_dich == "nop_tien_cong_ty":
 
                 if data.hinh_thuc == "tien_mat":
@@ -136,7 +144,6 @@ def create_thu_chi(
                 else:
                     quy_ct.tien_ngan_hang += so_tien
 
-            # ===== CHUYỂN TIỀN VÀO NH =====
             elif data.loai_giao_dich == "chuyen_tien_vao_NH":
 
                 if quy_ct.tien_mat < so_tien:
@@ -145,7 +152,6 @@ def create_thu_chi(
                 quy_ct.tien_mat -= so_tien
                 quy_ct.tien_ngan_hang += so_tien
 
-            # ===== TRẢ NCC =====
             elif data.loai_giao_dich == "tra_no_ncc":
 
                 if not data.ma_ncc:
@@ -174,7 +180,7 @@ def create_thu_chi(
                 ncc.cong_no -= so_tien
 
             else:
-                raise HTTPException(400, "Admin không được dùng loại này")
+                raise HTTPException(400, f"Admin không dùng loại này: {data.loai_giao_dich}")
 
         # =========================
         # UPDATE QUỸ
