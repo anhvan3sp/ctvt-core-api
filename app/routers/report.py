@@ -31,7 +31,20 @@ def report_day(
     ma_nv = user.ma_nv
 
     # =========================
-    # BÁN HÀNG (CHỈ NHÂN VIÊN NÀY)
+    # MAP LOẠI GIAO DỊCH → NỘI DUNG
+    # =========================
+
+    def map_noi_dung(loai_giao_dich):
+        mapping = {
+            "ban_hang": "Thu bán hàng",
+            "nhap_hang": "Chi nhập hàng",
+            "do_dau": "Chi đổ dầu",
+            "nop_tien": "Nộp tiền",
+        }
+        return mapping.get(loai_giao_dich, "Khác")
+
+    # =========================
+    # BÁN HÀNG
     # =========================
 
     sales = (
@@ -129,12 +142,16 @@ def report_day(
 
         so_tien = float(t.so_tien or 0)
 
+        # 🔥 FIX NỘI DUNG
+        noi_dung = t.noi_dung if t.noi_dung else map_noi_dung(t.loai_giao_dich)
+
         thu_chi_trong_ngay.append({
             "doi_tuong": t.doi_tuong,
             "so_tien": so_tien,
             "hinh_thuc": t.hinh_thuc,
-            "noi_dung": t.noi_dung,
+            "noi_dung": noi_dung,
             "loai": t.loai,
+            "loai_giao_dich": t.loai_giao_dich,
             "ngay": t.ngay
         })
 
