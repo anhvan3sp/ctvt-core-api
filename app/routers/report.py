@@ -30,21 +30,16 @@ def report_day(
 
     ma_nv = user.ma_nv
 
-    # =========================
-    # MAP LOẠI GIAO DỊCH → NỘI DUNG
-    # =========================
-
     def map_noi_dung(loai_giao_dich):
-        mapping = {
+        return {
             "ban_hang": "Thu bán hàng",
             "nhap_hang": "Chi nhập hàng",
             "do_dau": "Chi đổ dầu",
             "nop_tien": "Nộp tiền",
-        }
-        return mapping.get(loai_giao_dich, "Khác")
+        }.get(loai_giao_dich, "Khác")
 
     # =========================
-    # BÁN HÀNG
+    # BÁN HÀNG (THÊM CHI TIẾT)
     # =========================
 
     sales = (
@@ -67,13 +62,24 @@ def report_day(
 
     for s, ten_kh in sales:
 
-        so_binh = (
-            db.query(func.sum(HoaDonBanChiTiet.so_luong))
+        # 🔥 lấy chi tiết từng dòng
+        chi_tiet = (
+            db.query(HoaDonBanChiTiet)
             .filter(HoaDonBanChiTiet.id_hoa_don == s.id)
-            .scalar()
-        ) or 0
+            .all()
+        )
 
-        tong_so_binh_ban += float(so_binh)
+        chi_tiet_list = []
+
+        for ct in chi_tiet:
+            chi_tiet_list.append({
+                "ten_hang": ct.ten_hang,   # cần có field này trong model
+                "so_luong": float(ct.so_luong),
+                "don_gia": float(ct.don_gia),
+                "thanh_tien": float(ct.so_luong * ct.don_gia)
+            })
+
+            tong_so_binh_ban += float(ct.so_luong)
 
         tong_ban += float(s.tong_thanh_toan or 0)
         tong_tien_mat += float(s.tien_mat or 0)
@@ -82,7 +88,7 @@ def report_day(
         hoa_don_ban.append({
             "so_hd": s.so_hd,
             "ten_kh": ten_kh or "",
-            "so_binh": float(so_binh),
+            "chi_tiet": chi_tiet_list,   # 🔥 thêm vào đây
             "tong_tien": float(s.tong_tien or 0),
             "tien_mat": float(s.tien_mat or 0),
             "tien_ck": float(s.tien_ck or 0),
@@ -90,9 +96,8 @@ def report_day(
             "ngay": s.ngay
         })
 
-
     # =========================
-    # NHẬP HÀNG
+    # NHẬP HÀNG (GIỮ NGUYÊN)
     # =========================
 
     purchases = (
@@ -109,7 +114,6 @@ def report_day(
     tong_nhap = 0
 
     for p in purchases:
-
         tong_nhap += float(p.tong_tien or 0)
 
         hoa_don_nhap.append({
@@ -117,7 +121,6 @@ def report_day(
             "tong_tien": float(p.tong_tien or 0),
             "ngay": p.ngay
         })
-
 
     # =========================
     # THU CHI
@@ -134,15 +137,12 @@ def report_day(
     )
 
     thu_chi_trong_ngay = []
-
     tong_thu = 0
     tong_chi = 0
 
     for t in thu_chi_data:
 
         so_tien = float(t.so_tien or 0)
-
-        # 🔥 FIX NỘI DUNG
         noi_dung = t.noi_dung if t.noi_dung else map_noi_dung(t.loai_giao_dich)
 
         thu_chi_trong_ngay.append({
@@ -151,7 +151,6 @@ def report_day(
             "hinh_thuc": t.hinh_thuc,
             "noi_dung": noi_dung,
             "loai": t.loai,
-            "loai_giao_dich": t.loai_giao_dich,
             "ngay": t.ngay
         })
 
@@ -159,11 +158,6 @@ def report_day(
             tong_thu += so_tien
         else:
             tong_chi += so_tien
-
-
-    # =========================
-    # TỔNG KẾT
-    # =========================
 
     ton_quy = (
         tong_tien_mat
@@ -174,32 +168,18 @@ def report_day(
     )
 
     return {
-
         "nhan_vien": ma_nv,
-
         "hoa_don_ban_trong_ngay": hoa_don_ban,
-
         "hoa_don_nhap_trong_ngay": hoa_don_nhap,
-
         "thu_chi_trong_ngay": thu_chi_trong_ngay,
-
         "tong_ket": {
-
             "tong_so_binh_ban": tong_so_binh_ban,
-
             "tong_ban": tong_ban,
-
             "tong_nhap": tong_nhap,
-
             "tong_tien_mat": tong_tien_mat,
-
             "tong_chuyen_khoan": tong_tien_ck,
-
             "tong_thu": tong_thu,
-
             "tong_chi": tong_chi,
-
             "ton_quy": ton_quy
         }
-
     }
