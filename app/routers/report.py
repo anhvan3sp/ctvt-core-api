@@ -9,7 +9,8 @@ from app.models import (
     HoaDonBanChiTiet,
     HoaDonNhap,
     ThuChi,
-    KhachHang
+    KhachHang,
+    SanPham  # 🔥 thêm
 )
 from app.auth_utils import get_current_user
 
@@ -39,7 +40,7 @@ def report_day(
         }.get(loai_giao_dich, "Khác")
 
     # =========================
-    # BÁN HÀNG (THÊM CHI TIẾT)
+    # BÁN HÀNG (FIX CHI TIẾT)
     # =========================
 
     sales = (
@@ -62,21 +63,23 @@ def report_day(
 
     for s, ten_kh in sales:
 
-        # 🔥 lấy chi tiết từng dòng
+        # 🔥 JOIN lấy tên sản phẩm
         chi_tiet = (
-            db.query(HoaDonBanChiTiet)
+            db.query(HoaDonBanChiTiet, SanPham.ten_sp)
+            .join(SanPham, HoaDonBanChiTiet.ma_sp == SanPham.ma_sp)
             .filter(HoaDonBanChiTiet.id_hoa_don == s.id)
             .all()
         )
 
         chi_tiet_list = []
 
-        for ct in chi_tiet:
+        for ct, ten_sp in chi_tiet:
+
             chi_tiet_list.append({
-                "ten_hang": ct.ten_hang,   # cần có field này trong model
+                "ten_hang": ten_sp,
                 "so_luong": float(ct.so_luong),
                 "don_gia": float(ct.don_gia),
-                "thanh_tien": float(ct.so_luong * ct.don_gia)
+                "thanh_tien": float(ct.thanh_tien)
             })
 
             tong_so_binh_ban += float(ct.so_luong)
@@ -88,7 +91,7 @@ def report_day(
         hoa_don_ban.append({
             "so_hd": s.so_hd,
             "ten_kh": ten_kh or "",
-            "chi_tiet": chi_tiet_list,   # 🔥 thêm vào đây
+            "chi_tiet": chi_tiet_list,  # 🔥 quan trọng
             "tong_tien": float(s.tong_tien or 0),
             "tien_mat": float(s.tien_mat or 0),
             "tien_ck": float(s.tien_ck or 0),
