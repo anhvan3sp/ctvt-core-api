@@ -185,6 +185,7 @@ class HoaDonBanCreate(BaseModel):
     tien_mat: Decimal = Decimal("0")
     tien_ck: Decimal = Decimal("0")
     items: List[HoaDonBanItemCreate]
+    force: Optional[bool] = False
 
 
 class HoaDonBanResponse(BaseModel):
