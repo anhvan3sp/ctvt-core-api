@@ -120,7 +120,7 @@ def create_sale(
             tong_tien += sl * gia
 
         # =========================
-        # CHECK TRÙNG (🔥 FIX)
+        # CHECK TRÙNG (FIX CHUẨN)
         # =========================
         existing = db.execute(text("""
             SELECT id FROM hoa_don_ban
@@ -130,13 +130,13 @@ def create_sale(
               AND tong_tien = :tong_tien
             LIMIT 1
         """), {
-            "ngay": datetime.now().date(),
+            "ngay": data.ngay,   # 🔥 FIX
             "ma_nv": user.ma_nv,
             "ma_kh": data.ma_kh,
             "tong_tien": tong_tien
         }).fetchone()
 
-        if existing and not getattr(data, "force", False):
+        if existing and not data.force:   # 🔥 FIX
             raise HTTPException(409, "HOA_DON_TRUNG")
 
         # =========================
@@ -219,11 +219,8 @@ def create_sale(
         )
 
         db.add(hoa_don)
-        db.flush()  # 🔥 lấy id
+        db.flush()
 
-        # =========================
-        # CHI TIẾT (🔥 FIX)
-        # =========================
         for item in data.items:
             db.add(HoaDonBanChiTiet(
                 id_hoa_don=hoa_don.id,
