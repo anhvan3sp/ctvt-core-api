@@ -264,6 +264,16 @@ class CongNoKhachHang(Base):
 
     so_du = Column(DECIMAL(18,2), default=0)
 
+class CongNoKhachHangLog(Base):
+    __tablename__ = "cong_no_khach_hang_log"
+
+    id = Column(Integer, primary_key=True)
+    ma_kh = Column(String(50))
+    ngay = Column(DateTime)
+    phat_sinh = Column(DECIMAL(18,2))
+    loai = Column(String(50))
+    ref_id = Column(Integer)  # ✅ THÊM DÒNG NÀY
+    created_at = Column(DateTime, default=datetime.utcnow)
 # ======================
 # CÔNG NỢ NHÀ CUNG CẤP
 # ======================
@@ -276,14 +286,22 @@ class CongNoNCC(Base):
 
     so_du = Column(DECIMAL(18,2), default=0)
 
-class CongNoKhachHangLog(Base):
-    __tablename__ = "cong_no_khach_hang_log"
+class CongNoNCCLog(Base):
+    __tablename__ = "cong_no_ncc_log"
 
     id = Column(Integer, primary_key=True)
-    ma_kh = Column(String(50))
-    ngay = Column(DateTime)
-    phat_sinh = Column(DECIMAL(18,2))
+
+    ma_ncc = Column(String(50), nullable=False)
+
+    ngay = Column(DateTime, nullable=False)
+
+    phat_sinh = Column(DECIMAL(18,2), nullable=False)
+
     loai = Column(String(50))
-    ref_id = Column(Integer)  # ✅ THÊM DÒNG NÀY
+
+    ref_id = Column(Integer)
+
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
 
