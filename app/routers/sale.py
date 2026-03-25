@@ -9,6 +9,7 @@ from app.schemas import HoaDonBanCreate
 from app.auth_utils import require_roles
 from app.models import (
     HoaDonBan,
+    HoaDonBanChiTiet,
     TonKhoChotNgay,
     NhatKyKho,
     QuyNhanVienChotNgay,
@@ -38,7 +39,7 @@ def create_sale(
     try:
 
         # =========================
-        # IDEMPOTENCY (🔥 NEW)
+        # IDEMPOTENCY
         # =========================
         if getattr(data, "idempotency_key", None):
             existed = db.execute(text("""
@@ -49,26 +50,6 @@ def create_sale(
 
             if existed:
                 return {"message": "OK (duplicate ignored)"}
-
-        # =========================
-        # CHECK TRÙNG (business)
-        # =========================
-        existing = db.execute(text("""
-            SELECT id FROM hoa_don_ban
-            WHERE DATE(ngay) = :ngay
-              AND ma_nv = :ma_nv
-              AND ma_kh = :ma_kh
-              AND tong_tien = :tong_tien
-            LIMIT 1
-        """), {
-            "ngay": datetime.now().date(),
-            "ma_nv": user.ma_nv,
-            "ma_kh": data.ma_kh,
-            "tong_tien": data.tong_tien if hasattr(data, "tong_tien") else 0
-        }).fetchone()
-
-        if existing and not getattr(data, "force", False):
-            raise HTTPException(409, "HOA_DON_TRUNG")
 
         # =========================
         # CHECK QUYỀN KHO
@@ -86,7 +67,7 @@ def create_sale(
                 raise HTTPException(403, "Không được phép dùng kho")
 
         # =========================
-        # LOCK QUỸ
+        # LOCK QUỸ + KHÁCH
         # =========================
         quy_nv = db.query(QuyNhanVienChotNgay)\
             .filter_by(ma_nv=user.ma_nv)\
@@ -97,16 +78,13 @@ def create_sale(
             .with_for_update()\
             .first()
 
-        if not quy_nv or not quy_ct:
-            raise HTTPException(400, "Thiếu quỹ")
-
-        # =========================
-        # LOCK KHÁCH
-        # =========================
         kh = db.query(KhachHang)\
             .filter_by(ma_kh=data.ma_kh)\
             .with_for_update()\
             .first()
+
+        if not quy_nv or not quy_ct:
+            raise HTTPException(400, "Thiếu quỹ")
 
         if not kh:
             raise HTTPException(400, "Không có khách")
@@ -141,14 +119,33 @@ def create_sale(
 
             tong_tien += sl * gia
 
+        # =========================
+        # CHECK TRÙNG (🔥 FIX)
+        # =========================
+        existing = db.execute(text("""
+            SELECT id FROM hoa_don_ban
+            WHERE DATE(ngay) = :ngay
+              AND ma_nv = :ma_nv
+              AND ma_kh = :ma_kh
+              AND tong_tien = :tong_tien
+            LIMIT 1
+        """), {
+            "ngay": datetime.now().date(),
+            "ma_nv": user.ma_nv,
+            "ma_kh": data.ma_kh,
+            "tong_tien": tong_tien
+        }).fetchone()
+
+        if existing and not getattr(data, "force", False):
+            raise HTTPException(409, "HOA_DON_TRUNG")
+
+        # =========================
+        # TIỀN
+        # =========================
         tien_mat = to_decimal(data.tien_mat)
         tien_ck = to_decimal(data.tien_ck)
-
         tong_thanh_toan = tien_mat + tien_ck
 
-        # =========================
-        # QUỸ
-        # =========================
         if tien_mat > 0:
             quy_nv.so_du += tien_mat
 
@@ -222,6 +219,19 @@ def create_sale(
         )
 
         db.add(hoa_don)
+        db.flush()  # 🔥 lấy id
+
+        # =========================
+        # CHI TIẾT (🔥 FIX)
+        # =========================
+        for item in data.items:
+            db.add(HoaDonBanChiTiet(
+                id_hoa_don=hoa_don.id,
+                ma_sp=item.ma_sp,
+                so_luong=item.so_luong,
+                don_gia=item.don_gia,
+                thanh_tien=item.so_luong * item.don_gia
+            ))
 
         db.commit()
 
