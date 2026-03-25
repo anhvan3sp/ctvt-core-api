@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
-from datetime import datetime, timedelta
+from datetime import datetime
 from decimal import Decimal, InvalidOperation
 
 from app.database import get_db
@@ -73,20 +73,23 @@ def create_thu_chi(
             raise HTTPException(400, "Số tiền phải > 0")
 
         # =========================
-        # 1.5 DUPLICATE CHECK (🔥 NEW)
+        # 1.5 DUPLICATE CHECK (🔥 ERP - TRONG NGÀY)
         # =========================
-        # check trong 10 giây gần nhất
+        today = datetime.now().date()
+
         existed = db.query(ThuChi).filter(
             ThuChi.ma_nv == user.ma_nv,
             ThuChi.so_tien == so_tien,
             ThuChi.loai == data.loai,
             ThuChi.loai_giao_dich == data.loai_giao_dich,
-            ThuChi.ngay >= datetime.now() - timedelta(seconds=10)
+            ThuChi.ngay >= today
         ).first()
 
-        # nếu trùng và chưa force → báo
         if existed and not getattr(data, "force", False):
-            raise HTTPException(409, "GIAO_DICH_TRUNG")
+            raise HTTPException(
+                409,
+                f"Giao dịch giống đã tồn tại lúc {existed.ngay.strftime('%H:%M:%S')}"
+            )
 
         # =========================
         # 2. LOCK QUỸ
