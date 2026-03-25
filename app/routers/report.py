@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from datetime import date, datetime, time
-from sqlalchemy import func, and_
+from sqlalchemy import func
 
 from app.database import get_db
 from app.models import (
@@ -28,40 +28,31 @@ def report_day(
     start = datetime.combine(ngay, time.min)
     end = datetime.combine(ngay, time.max)
 
-    is_admin = user.vai_tro == "admin"
+    ma_nv = user.ma_nv
 
     # =========================
-    # FILTER NHÂN VIÊN
+    # BÁN HÀNG (CHỈ NHÂN VIÊN NÀY)
     # =========================
 
-    def filter_nv(query, model):
-        if is_admin:
-            return query
-        return query.filter(model.ma_nv == user.ma_nv)
-
-    # =========================
-    # BÁN HÀNG
-    # =========================
-
-    sales_query = (
+    sales = (
         db.query(HoaDonBan, KhachHang.ten_cua_hang)
         .outerjoin(KhachHang, HoaDonBan.ma_kh == KhachHang.ma_kh)
         .filter(
             HoaDonBan.ngay == ngay,
-            HoaDonBan.trang_thai == "xac_nhan"
+            HoaDonBan.trang_thai == "xac_nhan",
+            HoaDonBan.ma_nv == ma_nv
         )
+        .all()
     )
 
-    sales_query = filter_nv(sales_query, HoaDonBan)
-
-    sales = sales_query.all()
+    hoa_don_ban = []
 
     tong_ban = 0
     tong_tien_mat = 0
     tong_tien_ck = 0
     tong_so_binh_ban = 0
 
-    for s, _ in sales:
+    for s, ten_kh in sales:
 
         so_binh = (
             db.query(func.sum(HoaDonBanChiTiet.so_luong))
@@ -70,98 +61,128 @@ def report_day(
         ) or 0
 
         tong_so_binh_ban += float(so_binh)
+
         tong_ban += float(s.tong_thanh_toan or 0)
         tong_tien_mat += float(s.tien_mat or 0)
         tong_tien_ck += float(s.tien_ck or 0)
+
+        hoa_don_ban.append({
+            "so_hd": s.so_hd,
+            "ten_kh": ten_kh or "",
+            "so_binh": float(so_binh),
+            "tong_tien": float(s.tong_tien or 0),
+            "tien_mat": float(s.tien_mat or 0),
+            "tien_ck": float(s.tien_ck or 0),
+            "tong_thanh_toan": float(s.tong_thanh_toan or 0),
+            "ngay": s.ngay
+        })
+
 
     # =========================
     # NHẬP HÀNG
     # =========================
 
-    purchase_query = db.query(HoaDonNhap).filter(
-        HoaDonNhap.ngay == ngay,
-        HoaDonNhap.trang_thai == "xac_nhan"
+    purchases = (
+        db.query(HoaDonNhap)
+        .filter(
+            HoaDonNhap.ngay == ngay,
+            HoaDonNhap.trang_thai == "xac_nhan",
+            HoaDonNhap.ma_nv == ma_nv
+        )
+        .all()
     )
 
-    purchase_query = filter_nv(purchase_query, HoaDonNhap)
+    hoa_don_nhap = []
+    tong_nhap = 0
 
-    purchases = purchase_query.all()
+    for p in purchases:
 
-    tong_nhap = sum(float(p.tong_tien or 0) for p in purchases)
+        tong_nhap += float(p.tong_tien or 0)
+
+        hoa_don_nhap.append({
+            "so_hd": p.id,
+            "tong_tien": float(p.tong_tien or 0),
+            "ngay": p.ngay
+        })
+
 
     # =========================
-    # THU CHI (FIX TIME RANGE)
+    # THU CHI
     # =========================
 
-    thu_chi_query = db.query(ThuChi).filter(
-        ThuChi.ngay >= start,
-        ThuChi.ngay <= end
+    thu_chi_data = (
+        db.query(ThuChi)
+        .filter(
+            ThuChi.ngay >= start,
+            ThuChi.ngay <= end,
+            ThuChi.ma_nv == ma_nv
+        )
+        .all()
     )
 
-    thu_chi_query = filter_nv(thu_chi_query, ThuChi)
-
-    thu_chi = thu_chi_query.all()
+    thu_chi_trong_ngay = []
 
     tong_thu = 0
     tong_chi = 0
 
-    for t in thu_chi:
+    for t in thu_chi_data:
+
         so_tien = float(t.so_tien or 0)
+
+        thu_chi_trong_ngay.append({
+            "doi_tuong": t.doi_tuong,
+            "so_tien": so_tien,
+            "hinh_thuc": t.hinh_thuc,
+            "noi_dung": t.noi_dung,
+            "loai": t.loai,
+            "ngay": t.ngay
+        })
 
         if t.loai == "thu":
             tong_thu += so_tien
         else:
             tong_chi += so_tien
 
-    # =========================
-    # ADMIN: BREAKDOWN
-    # =========================
-
-    breakdown = []
-
-    if is_admin:
-        data_nv = (
-            db.query(
-                ThuChi.ma_nv,
-                func.sum(
-                    func.case(
-                        (ThuChi.loai == "thu", ThuChi.so_tien),
-                        else_=0
-                    )
-                ).label("tong_thu"),
-                func.sum(
-                    func.case(
-                        (ThuChi.loai == "chi", ThuChi.so_tien),
-                        else_=0
-                    )
-                ).label("tong_chi"),
-            )
-            .filter(ThuChi.ngay >= start, ThuChi.ngay <= end)
-            .group_by(ThuChi.ma_nv)
-            .all()
-        )
-
-        for row in data_nv:
-            breakdown.append({
-                "ma_nv": row.ma_nv,
-                "tong_thu": float(row.tong_thu or 0),
-                "tong_chi": float(row.tong_chi or 0)
-            })
 
     # =========================
-    # KẾT QUẢ
+    # TỔNG KẾT
     # =========================
+
+    ton_quy = (
+        tong_tien_mat
+        + tong_tien_ck
+        + tong_thu
+        - tong_chi
+        - tong_nhap
+    )
 
     return {
+
+        "nhan_vien": ma_nv,
+
+        "hoa_don_ban_trong_ngay": hoa_don_ban,
+
+        "hoa_don_nhap_trong_ngay": hoa_don_nhap,
+
+        "thu_chi_trong_ngay": thu_chi_trong_ngay,
+
         "tong_ket": {
+
             "tong_so_binh_ban": tong_so_binh_ban,
+
             "tong_ban": tong_ban,
+
             "tong_nhap": tong_nhap,
+
             "tong_tien_mat": tong_tien_mat,
+
             "tong_chuyen_khoan": tong_tien_ck,
+
             "tong_thu": tong_thu,
+
             "tong_chi": tong_chi,
-            "ton_quy": tong_tien_mat + tong_tien_ck + tong_thu - tong_chi - tong_nhap
-        },
-        "breakdown_nhan_vien": breakdown if is_admin else None
+
+            "ton_quy": ton_quy
+        }
+
     }
