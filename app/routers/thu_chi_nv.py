@@ -56,7 +56,23 @@ def create_thu_chi(
     try:
 
         # =========================
-        # VALIDATE
+        # 0. IDEMPOTENCY (NEW - KHÔNG PHÁ)
+        # =========================
+        if data.idempotency_key:
+            existed = db.query(ThuChi).filter_by(
+                idempotency_key=data.idempotency_key
+            ).first()
+
+            if existed:
+                return {
+                    "msg": "DUPLICATE",
+                    "id": existed.id,
+                    "so_du_nv": float(existed.so_du_sau or 0),
+                    "tong_quy": float(existed.so_du_ct_sau or 0)
+                }
+
+        # =========================
+        # 1. VALIDATE (GIỮ NGUYÊN + FIX)
         # =========================
         if data.loai_giao_dich not in VALID_GD:
             raise HTTPException(400, f"Loại giao dịch không hợp lệ: {data.loai_giao_dich}")
@@ -67,7 +83,7 @@ def create_thu_chi(
             raise HTTPException(400, "Số tiền phải > 0")
 
         # =========================
-        # LOCK QUỸ
+        # 2. LOCK QUỸ (GIỮ NGUYÊN)
         # =========================
         quy_ct = db.query(QuyCongTyChotNgay).with_for_update().first()
 
@@ -75,8 +91,9 @@ def create_thu_chi(
             raise HTTPException(400, "Chưa có quỹ công ty")
 
         quy_nv = None
+        is_admin = user.ma_nv == "admin"
 
-        if user.ma_nv != "admin":
+        if not is_admin:
             quy_nv = db.query(QuyNhanVienChotNgay)\
                 .filter_by(ma_nv=user.ma_nv)\
                 .with_for_update()\
@@ -86,10 +103,12 @@ def create_thu_chi(
                 raise HTTPException(400, "Chưa có quỹ nhân viên")
 
         # =========================
-        # ===== NHÂN VIÊN =====
+        # 3. NGHIỆP VỤ (NÂNG CẤP NHẸ)
         # =========================
-        if user.ma_nv != "admin":
 
+        if not is_admin:
+
+            # ===== NỘP TIỀN =====
             if data.loai_giao_dich == "nop_tien":
 
                 if quy_nv.so_du < so_tien:
@@ -98,10 +117,8 @@ def create_thu_chi(
                 quy_nv.so_du -= so_tien
                 quy_ct.tien_mat += so_tien
 
+            # ===== KHÁCH TRẢ NỢ =====
             elif data.loai_giao_dich == "khach_tra_no":
-
-                if not data.ma_kh:
-                    raise HTTPException(400, "Thiếu mã khách")
 
                 kh = db.query(KhachHang)\
                     .filter_by(ma_kh=data.ma_kh)\
@@ -120,6 +137,26 @@ def create_thu_chi(
                 else:
                     quy_ct.tien_ngan_hang += so_tien
 
+            # ===== KHÁCH ĐẶT HÀNG (NEW) =====
+            elif data.loai_giao_dich == "khach_dat_hang":
+
+                kh = db.query(KhachHang)\
+                    .filter_by(ma_kh=data.ma_kh)\
+                    .with_for_update()\
+                    .first()
+
+                if not kh:
+                    raise HTTPException(400, "Không có khách")
+
+                # công ty nợ khách
+                kh.cong_no -= so_tien
+
+                if data.hinh_thuc == "tien_mat":
+                    quy_nv.so_du += so_tien
+                else:
+                    quy_ct.tien_ngan_hang += so_tien
+
+            # ===== CHI =====
             elif data.loai_giao_dich in ["do_dau", "sua_xe", "dang_kiem", "chi_khac", "tien_do"]:
 
                 if quy_nv.so_du < so_tien:
@@ -127,6 +164,7 @@ def create_thu_chi(
 
                 quy_nv.so_du -= so_tien
 
+            # ===== THU KHÁC =====
             elif data.loai_giao_dich in ["thu_khac", "nop_them"]:
                 quy_nv.so_du += so_tien
 
@@ -138,25 +176,7 @@ def create_thu_chi(
         # =========================
         else:
 
-            if data.loai_giao_dich == "nop_tien_cong_ty":
-
-                if data.hinh_thuc == "tien_mat":
-                    quy_ct.tien_mat += so_tien
-                else:
-                    quy_ct.tien_ngan_hang += so_tien
-
-            elif data.loai_giao_dich == "chuyen_tien_vao_NH":
-
-                if quy_ct.tien_mat < so_tien:
-                    raise HTTPException(400, "Không đủ tiền mặt")
-
-                quy_ct.tien_mat -= so_tien
-                quy_ct.tien_ngan_hang += so_tien
-
-            elif data.loai_giao_dich == "tra_no_ncc":
-
-                if not data.ma_ncc:
-                    raise HTTPException(400, "Thiếu NCC")
+            if data.loai_giao_dich == "tra_no_ncc":
 
                 ncc = db.query(NhaCungCap)\
                     .filter_by(ma_ncc=data.ma_ncc)\
@@ -184,25 +204,27 @@ def create_thu_chi(
                 raise HTTPException(400, f"Admin không dùng loại này: {data.loai_giao_dich}")
 
         # =========================
-        # UPDATE QUỸ
+        # 4. UPDATE QUỸ (GIỮ NGUYÊN)
         # =========================
         quy_ct.tong_quy = quy_ct.tien_mat + quy_ct.tien_ngan_hang
 
         # =========================
-        # LOG
+        # 5. LOG (NÂNG CẤP)
         # =========================
         db.add(ThuChi(
             ngay=datetime.now(),
-            doi_tuong="cong_ty" if user.ma_nv == "admin" else "nhan_vien",
+            doi_tuong="cong_ty" if is_admin else "nhan_vien",
             ma_nv=user.ma_nv,
             so_tien=so_tien,
             loai=data.loai,
             hinh_thuc=data.hinh_thuc,
             loai_giao_dich=data.loai_giao_dich,
-            ma_kh=data.ma_kh if data.loai_giao_dich == "khach_tra_no" else None,
-            ma_ncc=data.ma_ncc if data.loai_giao_dich == "tra_no_ncc" else None,
+            ma_kh=data.ma_kh,
+            ma_ncc=data.ma_ncc,
             so_du_sau=quy_nv.so_du if quy_nv else Decimal("0"),
-            so_du_ct_sau=quy_ct.tong_quy
+            so_du_ct_sau=quy_ct.tong_quy,
+            idempotency_key=data.idempotency_key,   # NEW
+            created_by=user.ma_nv                   # NEW
         ))
 
         db.commit()
