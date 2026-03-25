@@ -4,7 +4,13 @@ from sqlalchemy import func
 from datetime import datetime, timedelta
 
 from app.database import get_db
-from app.models import NhatKyKho, QuyCongTyChotNgay, QuyNhanVienChotNgay
+from app.models import (
+    NhatKyKho,
+    QuyCongTyChotNgay,
+    QuyNhanVienChotNgay,
+    ThuChi,
+    SanPham
+)
 from app.auth_utils import get_current_user
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
@@ -22,19 +28,67 @@ def dashboard(
     end = start + timedelta(days=1)
 
     # =========================
+    # PHÂN LOẠI BÁN THEO SẢN PHẨM
+    # =========================
+
+    def get_ban_theo_loai(query_filter):
+
+        rows = db.query(
+            SanPham.ten_sp,
+            func.sum(NhatKyKho.so_luong)
+        ).join(
+            SanPham, NhatKyKho.ma_sp == SanPham.ma_sp
+        ).filter(
+            NhatKyKho.loai == "xuat",
+            NhatKyKho.ngay >= start,
+            NhatKyKho.ngay < end,
+            *query_filter
+        ).group_by(SanPham.ten_sp).all()
+
+        return [
+            {
+                "ten": r[0],
+                "so_luong": float(r[1] or 0)
+            } for r in rows
+        ]
+
+    # =========================
+    # THU / CHI TRONG NGÀY
+    # =========================
+
+    def get_thu_chi(filter_nv):
+
+        thu = db.query(
+            func.coalesce(func.sum(ThuChi.so_tien), 0)
+        ).filter(
+            ThuChi.loai == "thu",
+            ThuChi.ngay >= start,
+            ThuChi.ngay < end,
+            *filter_nv
+        ).scalar() or 0
+
+        chi = db.query(
+            func.coalesce(func.sum(ThuChi.so_tien), 0)
+        ).filter(
+            ThuChi.loai == "chi",
+            ThuChi.ngay >= start,
+            ThuChi.ngay < end,
+            *filter_nv
+        ).scalar() or 0
+
+        return float(thu), float(chi)
+
+    # =========================
     # ADMIN
     # =========================
     if user.ma_nv == "admin":
 
-        ban_hom_nay = db.query(
-            func.coalesce(func.sum(NhatKyKho.so_luong), 0)
-        ).filter(
-            NhatKyKho.loai == "xuat",
-            NhatKyKho.ngay >= start,
-            NhatKyKho.ngay < end
-        ).scalar() or 0
+        ban_theo_loai = get_ban_theo_loai([])
 
-        # 👉 LẤY QUỸ CÔNG TY (1 dòng)
+        ban_hom_nay = sum(x["so_luong"] for x in ban_theo_loai)
+
+        thu, chi = get_thu_chi([])
+
         quy = db.query(QuyCongTyChotNgay).first()
 
         tien_mat = float(quy.tien_mat) if quy else 0
@@ -43,12 +97,14 @@ def dashboard(
 
         return {
             "loai": "cong_ty",
+            "ten_nv": user.ma_nv,
             "ban_hom_nay": float(ban_hom_nay),
+            "ban_theo_loai": ban_theo_loai,
             "tien_mat": tien_mat,
             "tien_ngan_hang": tien_ngan_hang,
             "tong_quy": tong_quy,
-            "thu_hom_nay": 0,
-            "chi_hom_nay": 0
+            "thu_hom_nay": thu,
+            "chi_hom_nay": chi
         }
 
     # =========================
@@ -56,14 +112,15 @@ def dashboard(
     # =========================
     else:
 
-        ban_hom_nay = db.query(
-            func.coalesce(func.sum(NhatKyKho.so_luong), 0)
-        ).filter(
-            NhatKyKho.loai == "xuat",
-            NhatKyKho.ma_nv == user.ma_nv,
-            NhatKyKho.ngay >= start,
-            NhatKyKho.ngay < end
-        ).scalar() or 0
+        ban_theo_loai = get_ban_theo_loai([
+            NhatKyKho.ma_nv == user.ma_nv
+        ])
+
+        ban_hom_nay = sum(x["so_luong"] for x in ban_theo_loai)
+
+        thu, chi = get_thu_chi([
+            ThuChi.ma_nv == user.ma_nv
+        ])
 
         quy = db.query(QuyNhanVienChotNgay).filter(
             QuyNhanVienChotNgay.ma_nv == user.ma_nv
@@ -73,8 +130,10 @@ def dashboard(
 
         return {
             "loai": "nhan_vien",
+            "ten_nv": user.ma_nv,
             "ban_hom_nay": float(ban_hom_nay),
+            "ban_theo_loai": ban_theo_loai,
             "so_du": so_du,
-            "thu_hom_nay": 0,
-            "chi_hom_nay": 0
+            "thu_hom_nay": thu,
+            "chi_hom_nay": chi
         }
