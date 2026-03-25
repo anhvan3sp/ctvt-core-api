@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 
@@ -15,7 +16,7 @@ from app.schemas import ThuChiCreate
 router = APIRouter(prefix="/thu-chi-nv", tags=["thu_chi_nhan_vien"])
 
 
-# ====== CONST (SYNC WITH DB) ======
+# ====== CONST ======
 VALID_GD = {
     "tien_do",
     "do_dau",
@@ -45,7 +46,7 @@ def create_thu_chi(
     try:
 
         # =========================
-        # 0. IDEMPOTENCY (GIỮ)
+        # 0. IDEMPOTENCY (FAST CHECK)
         # =========================
         if data.idempotency_key:
             existed = db.query(ThuChi).filter_by(
@@ -92,12 +93,10 @@ def create_thu_chi(
                 raise HTTPException(400, "Chưa có quỹ nhân viên")
 
         # =========================
-        # 3. NGHIỆP VỤ (CLEAN)
+        # 3. NGHIỆP VỤ
         # =========================
-
         if not is_admin:
 
-            # ===== NỘP TIỀN NV → CT =====
             if data.loai_giao_dich == "nop_tien":
 
                 if quy_nv.so_du < so_tien:
@@ -106,7 +105,6 @@ def create_thu_chi(
                 quy_nv.so_du -= so_tien
                 quy_ct.tien_mat += so_tien
 
-            # ===== CHI =====
             elif data.loai == "chi":
 
                 if quy_nv.so_du < so_tien:
@@ -114,7 +112,6 @@ def create_thu_chi(
 
                 quy_nv.so_du -= so_tien
 
-            # ===== THU =====
             elif data.loai == "thu":
 
                 if data.hinh_thuc == "tien_mat":
@@ -125,9 +122,6 @@ def create_thu_chi(
             else:
                 raise HTTPException(400, "Sai loại thu chi")
 
-        # =========================
-        # ===== ADMIN =====
-        # =========================
         else:
 
             if data.loai_giao_dich == "chuyen_tien_vao_NH":
@@ -147,9 +141,9 @@ def create_thu_chi(
         quy_ct.tong_quy = quy_ct.tien_mat + quy_ct.tien_ngan_hang
 
         # =========================
-        # 5. LOG (GIỮ + FIX)
+        # 5. CREATE RECORD
         # =========================
-        db.add(ThuChi(
+        record = ThuChi(
             ngay=datetime.now(),
             doi_tuong="cong_ty" if is_admin else "nhan_vien",
             ma_nv=user.ma_nv,
@@ -163,9 +157,31 @@ def create_thu_chi(
             so_du_ct_sau=quy_ct.tong_quy,
             idempotency_key=data.idempotency_key,
             created_by=user.ma_nv
-        ))
+        )
 
-        db.commit()
+        db.add(record)
+
+        # =========================
+        # 6. COMMIT SAFE (🔥 FIX QUAN TRỌNG)
+        # =========================
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+
+            existed = db.query(ThuChi).filter_by(
+                idempotency_key=data.idempotency_key
+            ).first()
+
+            if existed:
+                return {
+                    "msg": "DUPLICATE",
+                    "id": existed.id,
+                    "so_du_nv": float(existed.so_du_sau or 0),
+                    "tong_quy": float(existed.so_du_ct_sau or 0)
+                }
+
+            raise HTTPException(500, "Lỗi duplicate")
 
     except HTTPException as e:
         db.rollback()
