@@ -216,7 +216,8 @@ class ThuChiCreate(BaseModel):
 
     noi_dung: Optional[str] = None
     idempotency_key: Optional[str] = None
-
+    # 🔥 THÊM DÒNG NÀY
+    force: Optional[bool] = False
     @field_validator("so_tien")
     @classmethod
     def validate_so_tien(cls, v):
