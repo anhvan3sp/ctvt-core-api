@@ -211,8 +211,14 @@ class ThuChi(Base):
     so_du_ct_sau = Column(DECIMAL(18,2))
 
     ngay_tao = Column(DateTime, default=datetime.utcnow)
+
+    # giữ nhưng không dùng
     ma_kh = Column(String(50), nullable=True)
     ma_ncc = Column(String(50), nullable=True)
+
+    # 🔥 FIX
+    idempotency_key = Column(String(100))
+    created_by = Column(String(50))
 
 # ======================
 # QUỸ NHÂN VIÊN
