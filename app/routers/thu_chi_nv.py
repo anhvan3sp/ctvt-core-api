@@ -19,6 +19,7 @@ router = APIRouter(prefix="/thu-chi-nv", tags=["thu_chi_nhan_vien"])
 
 # ====== CONST (SYNC WITH DB) ======
 VALID_GD = {
+    "khach_dat_hang"
     "tien_do",
     "nhap_hang",
     "ban_hang",
