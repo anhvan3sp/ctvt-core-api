@@ -152,7 +152,8 @@ class HoaDonNhapCreate(BaseModel):
     tien_ck: Decimal = Decimal("0")
     items: List[HoaDonNhapItemCreate]
     tong_tien: float
-    force_create: bool = False
+    force: Optional[bool] = False
+    
 
 
 class HoaDonNhapResponse(BaseModel):
