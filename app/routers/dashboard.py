@@ -9,7 +9,8 @@ from app.models import (
     QuyCongTyChotNgay,
     QuyNhanVienChotNgay,
     ThuChi,
-    SanPham
+    SanPham,
+    NhanVien   # 🔥 thêm
 )
 from app.auth_utils import get_current_user
 
@@ -26,6 +27,16 @@ def dashboard(
     now = datetime.utcnow() + timedelta(hours=7)
     start = datetime(now.year, now.month, now.day)
     end = start + timedelta(days=1)
+
+    # =========================
+    # LẤY TÊN NHÂN VIÊN
+    # =========================
+
+    nv = db.query(NhanVien).filter(
+        NhanVien.ma_nv == user.ma_nv
+    ).first()
+
+    ten_nv = nv.ten_nv if nv else user.ma_nv
 
     # =========================
     # PHÂN LOẠI BÁN THEO SẢN PHẨM
@@ -97,7 +108,8 @@ def dashboard(
 
         return {
             "loai": "cong_ty",
-            "ten_nv": user.ma_nv,
+            "ten_nv": ten_nv,            # 🔥 dùng tên thật
+            "vai_tro": user.vai_tro,     # 🔥 thêm role
             "ban_hom_nay": float(ban_hom_nay),
             "ban_theo_loai": ban_theo_loai,
             "tien_mat": tien_mat,
@@ -130,7 +142,8 @@ def dashboard(
 
         return {
             "loai": "nhan_vien",
-            "ten_nv": user.ma_nv,
+            "ten_nv": ten_nv,            # 🔥 dùng tên thật
+            "vai_tro": user.vai_tro,     # 🔥 thêm role
             "ban_hom_nay": float(ban_hom_nay),
             "ban_theo_loai": ban_theo_loai,
             "so_du": so_du,
