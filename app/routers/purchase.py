@@ -13,6 +13,7 @@ from app.models import (
     TonKhoChotNgay,
     NhatKyKho,
     QuyCongTyChotNgay,
+    QuyNhanVienChotNgay,
     ThuChi,
     CongNoNCC,
     CongNoNCCLog
@@ -37,14 +38,11 @@ def create_purchase(
     try:
 
         # =========================
-        # VALIDATE ITEMS
+        # VALIDATE
         # =========================
-        if not data.items or len(data.items) == 0:
+        if not data.items:
             raise HTTPException(400, "Không có sản phẩm")
 
-        # =========================
-        # TÍNH TIỀN
-        # =========================
         tong_tien = Decimal("0")
 
         for item in data.items:
@@ -82,12 +80,21 @@ def create_purchase(
         # =========================
         # LOCK QUỸ
         # =========================
-        quy_ct = db.query(QuyCongTyChotNgay)\
-            .with_for_update()\
-            .first()
+        quy_ct = db.query(QuyCongTyChotNgay).with_for_update().first()
 
         if not quy_ct:
-            raise HTTPException(400, "Thiếu quỹ")
+            raise HTTPException(400, "Thiếu quỹ công ty")
+
+        # chỉ lock quỹ NV nếu KHÔNG phải admin
+        quy_nv = None
+        if user.vai_tro != "admin":
+            quy_nv = db.query(QuyNhanVienChotNgay)\
+                .filter_by(ma_nv=user.ma_nv)\
+                .with_for_update()\
+                .first()
+
+            if not quy_nv:
+                raise HTTPException(400, "Thiếu quỹ nhân viên")
 
         # =========================
         # TĂNG KHO
@@ -121,7 +128,7 @@ def create_purchase(
             ))
 
         # =========================
-        # TIỀN
+        # TIỀN (🔥 FIX THEO ROLE)
         # =========================
         tien_mat = to_decimal(data.tien_mat)
         tien_ck = to_decimal(data.tien_ck)
@@ -129,11 +136,21 @@ def create_purchase(
         tong_thanh_toan = tien_mat + tien_ck
         no_moi = tong_tien - tong_thanh_toan
 
-        if tien_mat > 0:
-            quy_ct.tien_mat -= tien_mat
+        if user.vai_tro == "admin":
+            # 🔥 ADMIN → TẤT CẢ TRỪ QUỸ CÔNG TY
+            if tien_mat > 0:
+                quy_ct.tien_mat -= tien_mat
 
-        if tien_ck > 0:
-            quy_ct.tien_ngan_hang -= tien_ck
+            if tien_ck > 0:
+                quy_ct.tien_ngan_hang -= tien_ck
+
+        else:
+            # 🔥 NHÂN VIÊN
+            if tien_mat > 0:
+                quy_nv.so_du -= tien_mat
+
+            if tien_ck > 0:
+                quy_ct.tien_ngan_hang -= tien_ck
 
         # =========================
         # CÔNG NỢ NCC
@@ -158,12 +175,12 @@ def create_purchase(
         ))
 
         # =========================
-        # THU CHI
+        # THU CHI (🔥 FIX ROLE)
         # =========================
         if tien_mat > 0:
             db.add(ThuChi(
                 ngay=datetime.now(),
-                doi_tuong="cong_ty",
+                doi_tuong="cong_ty" if user.vai_tro == "admin" else "nhan_vien",
                 ma_nv=user.ma_nv,
                 so_tien=tien_mat,
                 loai="chi",
@@ -198,10 +215,10 @@ def create_purchase(
         )
 
         db.add(hoa_don)
-        db.flush()  # 🔥 bắt buộc
+        db.flush()
 
         # =========================
-        # CHI TIẾT (🔥 FIX CHẮC)
+        # CHI TIẾT
         # =========================
         chi_tiet_list = []
 
@@ -209,15 +226,13 @@ def create_purchase(
             sl = Decimal(str(item.so_luong))
             gia = Decimal(str(item.don_gia))
 
-            ct = HoaDonNhapChiTiet(
+            chi_tiet_list.append(HoaDonNhapChiTiet(
                 id_hoa_don=hoa_don.id,
                 ma_sp=item.ma_sp,
                 so_luong=sl,
                 don_gia=gia,
                 thanh_tien=sl * gia
-            )
-
-            chi_tiet_list.append(ct)
+            ))
 
         db.add_all(chi_tiet_list)
 
