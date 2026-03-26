@@ -1,7 +1,124 @@
 from app.database import Base
-from sqlalchemy import Column, Integer, String, Date, DateTime, Enum, ForeignKey, DECIMAL
+from sqlalchemy import Column, Integer, String, Date, DateTime, Enum, ForeignKey, DECIMAL, func,BigInteger, DECIMAL,Text, CheckConstraint,Index
 from datetime import datetime
+import enum
 
+# class phát sinh
+# =========================
+# ENUM KHỚP THU_CHI
+# =========================
+
+class LoaiPhatSinh(str, enum.Enum):
+    THU = "thu"
+    CHI = "chi"
+
+
+class TrangThaiPhatSinh(str, enum.Enum):
+    NHAP = "nhap"
+    XAC_NHAN = "xac_nhan"
+    HUY = "huy"
+
+
+class LoaiGiaoDich(str, enum.Enum):
+    DO_DAU = "do_dau"
+    SUA_XE = "sua_xe"
+    CHO_HANG = "cho_hang"
+    DOI_VO = "doi_vo"
+    THU_KHAC = "thu_khac"
+    CHI_KHAC = "chi_khac"
+
+
+# =========================
+# MODEL
+# =========================
+
+class PhatSinh(Base):
+    __tablename__ = "phat_sinh"
+
+    # ===== PK =====
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+
+    # ===== NHÂN VIÊN =====
+    ma_nv = Column(
+        String(20),
+        ForeignKey("nhan_vien.ma_nv", onupdate="CASCADE", ondelete="RESTRICT"),
+        nullable=False,
+        index=True
+    )
+
+    # ===== THỜI GIAN =====
+    ngay = Column(Date, nullable=False, index=True)
+
+    thoi_diem = Column(
+        DateTime,
+        nullable=True,
+        server_default=func.now()
+    )
+
+    # ===== LOẠI =====
+    loai = Column(
+        Enum(LoaiPhatSinh),
+        nullable=False,
+        index=True
+    )
+
+    loai_giao_dich = Column(
+        Enum(LoaiGiaoDich),
+        nullable=True
+    )
+
+    # ===== TIỀN =====
+    so_tien = Column(DECIMAL(18, 2), nullable=False)
+
+    dien_giai = Column(Text, nullable=True)
+
+    # ===== LINK NGOÀI (GIỮ NGUYÊN) =====
+    ref_id = Column(BigInteger, nullable=True)
+    ref_type = Column(String(50), nullable=True)
+
+    # =========================
+    # 🔥 CORE ERP
+    # =========================
+
+    trang_thai = Column(
+        Enum(TrangThaiPhatSinh),
+        nullable=False,
+        default=TrangThaiPhatSinh.NHAP,
+        index=True
+    )
+
+    # ledger chính
+    id_thu_chi = Column(BigInteger, nullable=True, index=True)
+
+    # ledger đảo
+    id_thu_chi_dao = Column(BigInteger, nullable=True)
+
+    # chống duplicate
+    idempotency_key = Column(String(100), nullable=True, unique=True)
+
+    # ===== AUDIT =====
+    created_at = Column(
+        DateTime,
+        nullable=True,
+        server_default=func.now()
+    )
+
+    updated_at = Column(
+        DateTime,
+        nullable=True,
+        server_default=func.now(),
+        onupdate=func.now()
+    )
+
+    # ===== CONSTRAINT =====
+    __table_args__ = (
+        CheckConstraint("so_tien >= 0", name="phat_sinh_chk_1"),
+
+        Index("idx_ma_nv", "ma_nv"),
+        Index("idx_ngay", "ngay"),
+        Index("idx_loai", "loai"),
+        Index("idx_trang_thai", "trang_thai"),
+    )
 
 # ======================
 # NHÂN VIÊN
