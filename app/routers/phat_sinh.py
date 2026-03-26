@@ -1,18 +1,179 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import select
-from datetime import date
+from sqlalchemy.exc import IntegrityError
+from datetime import datetime, date
 import uuid
 
-from app.db.session import get_db
-from app.models.phat_sinh import PhatSinh, TrangThaiPhatSinh
-from app.schemas.phat_sinh import (
+from app.database import get_db
+from app.models import PhatSinh, TrangThaiPhatSinh
+from app.schemas import (
     PhatSinhCreate,
     PhatSinhConfirm,
-    PhatSinhCancel
+    PhatSinhCancel,
+    ThuChiCreate
 )
+from app.auth_utils import get_current_user
 
-# ⚠️ import API cũ (service hoặc call nội bộ)
-from app.services.thu_chi_service import create_thu_chi
+# 🔥 gọi lại API thu_chi
+from app.routers.thu_chi_nv import create_thu_chi
 
-router = APIRouter(prefix="/phat-sinh", tags=["PhatSinh"])
+router = APIRouter(prefix="/phat-sinh", tags=["phat_sinh"])
+
+
+# =========================
+# CREATE (NHÁP)
+# =========================
+@router.post("/create")
+def create_phat_sinh(
+    data: PhatSinhCreate,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user)
+):
+    ps = PhatSinh(
+        ma_nv=user.ma_nv,
+        ngay=data.ngay,
+        loai=data.loai,
+        loai_giao_dich=data.loai_giao_dich,
+        so_tien=data.so_tien,
+        dien_giai=data.dien_giai,
+        trang_thai=TrangThaiPhatSinh.NHAP
+    )
+
+    db.add(ps)
+    db.commit()
+    db.refresh(ps)
+
+    return ps
+
+
+# =========================
+# CONFIRM (🔥 QUAN TRỌNG)
+# =========================
+@router.post("/confirm")
+def confirm_phat_sinh(
+    data: PhatSinhConfirm,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user)
+):
+    try:
+        with db.begin():
+
+            # ===== LOCK =====
+            ps = db.execute(
+                select(PhatSinh)
+                .where(PhatSinh.id == data.id)
+                .with_for_update()
+            ).scalar_one_or_none()
+
+            if not ps:
+                raise HTTPException(404, "Không tìm thấy")
+
+            if ps.trang_thai != TrangThaiPhatSinh.NHAP:
+                raise HTTPException(400, "Đã xác nhận hoặc huỷ")
+
+            # ===== IDEMPOTENCY =====
+            idem_key = f"ps_confirm_{ps.id}"
+
+            # ===== CALL THU_CHI =====
+            tc_data = ThuChiCreate(
+                loai=ps.loai,
+                loai_giao_dich=ps.loai_giao_dich,
+                so_tien=float(ps.so_tien),
+                hinh_thuc="tien_mat",
+                noi_dung=f"PS #{ps.id} - {ps.dien_giai or ''}",
+                idempotency_key=idem_key
+            )
+
+            result = create_thu_chi(tc_data, db, user)
+
+            # ===== UPDATE =====
+            ps.trang_thai = TrangThaiPhatSinh.XAC_NHAN
+            ps.idempotency_key = idem_key
+
+    except HTTPException as e:
+        db.rollback()
+        raise e
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(500, str(e))
+
+    return {
+        "msg": "XAC_NHAN_OK",
+        "data": result
+    }
+
+
+# =========================
+# CANCEL (REVERSAL)
+# =========================
+@router.post("/cancel")
+def cancel_phat_sinh(
+    data: PhatSinhCancel,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user)
+):
+    try:
+        with db.begin():
+
+            ps = db.execute(
+                select(PhatSinh)
+                .where(PhatSinh.id == data.id)
+                .with_for_update()
+            ).scalar_one_or_none()
+
+            if not ps:
+                raise HTTPException(404, "Không tìm thấy")
+
+            if ps.trang_thai != TrangThaiPhatSinh.XAC_NHAN:
+                raise HTTPException(400, "Chỉ huỷ khi đã xác nhận")
+
+            # ===== ĐẢO LOẠI =====
+            loai_dao = "thu" if ps.loai == "chi" else "chi"
+
+            idem_key = f"ps_cancel_{ps.id}"
+
+            tc_data = ThuChiCreate(
+                loai=loai_dao,
+                loai_giao_dich=ps.loai_giao_dich,
+                so_tien=float(ps.so_tien),
+                hinh_thuc="tien_mat",
+                noi_dung=f"HUY PS #{ps.id}",
+                idempotency_key=idem_key
+            )
+
+            result = create_thu_chi(tc_data, db, user)
+
+            ps.trang_thai = TrangThaiPhatSinh.HUY
+
+    except HTTPException as e:
+        db.rollback()
+        raise e
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(500, str(e))
+
+    return {
+        "msg": "HUY_OK",
+        "data": result
+    }
+
+
+# =========================
+# LIST TODAY
+# =========================
+@router.get("/today")
+def get_today(
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user)
+):
+    today = date.today()
+
+    result = db.query(PhatSinh).filter(
+        PhatSinh.ma_nv == user.ma_nv,
+        PhatSinh.ngay == today
+    ).order_by(PhatSinh.id.desc()).all()
+
+    return result
