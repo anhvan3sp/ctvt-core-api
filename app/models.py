@@ -47,11 +47,13 @@ class PhatSinh(Base):
         server_default=func.now()
     )
 
+    # 🔥 FIX 1: ENUM → STRING
     loai = Column(
-        Enum(LoaiPhatSinh),
+        String(10),
         nullable=False,
         index=True
     )
+    
 
     # 🔥 FIX: dùng String để khớp DB thu_chi
     loai_giao_dich = Column(String(50), nullable=True)
@@ -68,11 +70,12 @@ class PhatSinh(Base):
     # =========================
 
     trang_thai = Column(
-        Enum(TrangThaiPhatSinh),
+        String(20),
         nullable=False,
         server_default=text("'nhap'"),
         index=True
     )
+   
 
     id_thu_chi = Column(BigInteger, nullable=True, index=True)
 
