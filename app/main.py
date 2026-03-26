@@ -13,6 +13,7 @@ from app.routers import system
 from app.routers import dashboard
 from app.routers import ai
 from app.routers import cancel
+from app.routers import phat_sinh
 app = FastAPI()
 
 
@@ -28,6 +29,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.include_router(phat_sinh.router)
 app.include_router(cancel.router)
 app.include_router(ai.router)
 app.include_router(dashboard.router)
