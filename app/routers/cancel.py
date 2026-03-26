@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from datetime import datetime
+from sqlalchemy import func
+from datetime import datetime, date
 from decimal import Decimal
 
 from app.database import get_db
@@ -18,11 +19,144 @@ from app.models import (
     CongNoKhachHang,
     CongNoKhachHangLog,
     CongNoNCC,
-    CongNoNCCLog
+    CongNoNCCLog,
+    KhachHang,
+    SanPham
 )
 
 router = APIRouter(prefix="/transaction", tags=["cancel"])
 
+
+# =====================================================
+# 🔥 API: LẤY DANH SÁCH GIAO DỊCH TRONG NGÀY
+# =====================================================
+
+@router.get("/today")
+def get_today_transactions(
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user)
+):
+    today = date.today()
+
+    result = []
+
+    # =========================
+    # BÁN HÀNG
+    # =========================
+    sales = (
+        db.query(HoaDonBan, KhachHang.ten_cua_hang)
+        .outerjoin(KhachHang, HoaDonBan.ma_kh == KhachHang.ma_kh)
+        .filter(
+            HoaDonBan.ngay == today,
+            HoaDonBan.ma_nv == user.ma_nv
+        )
+        .all()
+    )
+
+    for s, ten_kh in sales:
+
+        chi_tiet = (
+            db.query(HoaDonBanChiTiet, SanPham.ten_sp)
+            .join(SanPham, HoaDonBanChiTiet.ma_sp == SanPham.ma_sp)
+            .filter(HoaDonBanChiTiet.id_hoa_don == s.id)
+            .all()
+        )
+
+        chi_tiet_list = []
+
+        for ct, ten_sp in chi_tiet:
+            chi_tiet_list.append({
+                "ten_hang": ten_sp,
+                "so_luong": float(ct.so_luong),
+                "don_gia": float(ct.don_gia),
+                "thanh_tien": float(ct.thanh_tien)
+            })
+
+        result.append({
+            "id": s.id,
+            "loai": "ban",
+            "ten_kh": ten_kh or "",
+            "chi_tiet": chi_tiet_list,
+            "tong_tien": float(s.tong_thanh_toan or 0),
+            "trang_thai": s.trang_thai
+        })
+
+    # =========================
+    # NHẬP HÀNG
+    # =========================
+    purchases = (
+        db.query(HoaDonNhap)
+        .filter(
+            HoaDonNhap.ngay == today,
+            HoaDonNhap.ma_nv == user.ma_nv
+        )
+        .all()
+    )
+
+    for p in purchases:
+
+        chi_tiet = (
+            db.query(HoaDonNhapChiTiet, SanPham.ten_sp)
+            .join(SanPham, HoaDonNhapChiTiet.ma_sp == SanPham.ma_sp)
+            .filter(HoaDonNhapChiTiet.id_hoa_don == p.id)
+            .all()
+        )
+
+        chi_tiet_list = []
+
+        for ct, ten_sp in chi_tiet:
+            chi_tiet_list.append({
+                "ten_hang": ten_sp,
+                "so_luong": float(ct.so_luong),
+                "don_gia": float(ct.don_gia),
+                "thanh_tien": float(ct.thanh_tien)
+            })
+
+        result.append({
+            "id": p.id,
+            "loai": "nhap",
+            "ten_kh": "Nhà cung cấp",
+            "chi_tiet": chi_tiet_list,
+            "tong_tien": float(p.tong_tien or 0),
+            "trang_thai": p.trang_thai
+        })
+
+    # =========================
+    # THU CHI
+    # =========================
+    thu_chi = (
+        db.query(ThuChi)
+        .filter(
+            func.date(ThuChi.ngay) == today,
+            ThuChi.ma_nv == user.ma_nv
+        )
+        .all()
+    )
+
+    for t in thu_chi:
+
+        result.append({
+            "id": t.id,
+            "loai": "thu_chi",
+            "ten_kh": t.noi_dung or "Thu/Chi",
+            "chi_tiet": [
+                {
+                    "ten_hang": t.loai_giao_dich or "khac",
+                    "so_luong": 1,
+                    "don_gia": float(t.so_tien),
+                    "thanh_tien": float(t.so_tien)
+                }
+            ],
+            "tong_tien": float(t.so_tien),
+            "trang_thai": "active"
+        })
+
+    return result
+
+
+# =====================================================
+# 🔥 API: HUỶ GIAO DỊCH
+# =====================================================
 
 @router.post("/cancel")
 def cancel_transaction(
@@ -33,6 +167,9 @@ def cancel_transaction(
 ):
     try:
 
+        # =========================
+        # BÁN HÀNG
+        # =========================
         if loai == "ban":
 
             hoa_don = db.query(HoaDonBan)\
@@ -46,9 +183,6 @@ def cancel_transaction(
             if hoa_don.trang_thai == "huy":
                 raise HTTPException(400, "Đã huỷ rồi")
 
-            # =====================
-            # 1. HOÀN KHO
-            # =====================
             chi_tiet = db.query(HoaDonBanChiTiet)\
                 .filter_by(id_hoa_don=id).all()
 
@@ -64,15 +198,12 @@ def cancel_transaction(
                 db.add(NhatKyKho(
                     ma_kho=hoa_don.ma_kho,
                     ma_sp=ct.ma_sp,
-                    loai="nhap",  # đảo
+                    loai="nhap",
                     so_luong=ct.so_luong,
                     ma_nv=user.ma_nv,
                     ngay=datetime.now()
                 ))
 
-            # =====================
-            # 2. ĐẢO TIỀN
-            # =====================
             quy_nv = db.query(QuyNhanVienChotNgay)\
                 .filter_by(ma_nv=hoa_don.ma_nv)\
                 .with_for_update()\
@@ -90,7 +221,7 @@ def cancel_transaction(
                     doi_tuong="nhan_vien",
                     ma_nv=user.ma_nv,
                     so_tien=hoa_don.tien_mat,
-                    loai="chi",  # đảo
+                    loai="chi",
                     hinh_thuc="tien_mat",
                     loai_giao_dich="huy_ban"
                 ))
@@ -108,9 +239,6 @@ def cancel_transaction(
                     loai_giao_dich="huy_ban"
                 ))
 
-            # =====================
-            # 3. ĐẢO CÔNG NỢ
-            # =====================
             cn = db.query(CongNoKhachHang)\
                 .filter_by(ma_kh=hoa_don.ma_kh)\
                 .with_for_update()\
@@ -126,13 +254,10 @@ def cancel_transaction(
                     loai="huy_ban"
                 ))
 
-            # =====================
-            # 4. ĐÁNH DẤU
-            # =====================
             hoa_don.trang_thai = "huy"
 
         # =========================
-        # NHẬP HÀNG (tương tự)
+        # NHẬP HÀNG
         # =========================
         elif loai == "nhap":
 
@@ -169,6 +294,57 @@ def cancel_transaction(
                 ))
 
             hoa_don.trang_thai = "huy"
+
+        # =========================
+        # THU CHI
+        # =========================
+        elif loai == "thu_chi":
+
+            record = db.query(ThuChi)\
+                .filter_by(id=id)\
+                .with_for_update()\
+                .first()
+
+            if not record:
+                raise HTTPException(404, "Không tìm thấy")
+
+            quy_ct = db.query(QuyCongTyChotNgay)\
+                .with_for_update()\
+                .first()
+
+            quy_nv = db.query(QuyNhanVienChotNgay)\
+                .filter_by(ma_nv=record.ma_nv)\
+                .with_for_update()\
+                .first()
+
+            so_tien = record.so_tien
+
+            if record.loai == "chi":
+                if record.hinh_thuc == "tien_mat":
+                    quy_nv.so_du += so_tien
+                else:
+                    quy_ct.tien_ngan_hang += so_tien
+
+                loai_moi = "thu"
+
+            else:
+                if record.hinh_thuc == "tien_mat":
+                    quy_nv.so_du -= so_tien
+                else:
+                    quy_ct.tien_ngan_hang -= so_tien
+
+                loai_moi = "chi"
+
+            db.add(ThuChi(
+                ngay=datetime.now(),
+                doi_tuong=record.doi_tuong,
+                ma_nv=record.ma_nv,
+                so_tien=so_tien,
+                loai=loai_moi,
+                hinh_thuc=record.hinh_thuc,
+                loai_giao_dich="huy_" + (record.loai_giao_dich or "khac"),
+                created_by=user.ma_nv
+            ))
 
         else:
             raise HTTPException(400, "Loại không hợp lệ")
