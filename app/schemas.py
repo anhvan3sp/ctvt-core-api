@@ -30,6 +30,7 @@ class CongNoNCCDauKy(BaseModel):
     ma_ncc: str
     so_no: float
 
+
 class QuyCongTyDauKy(BaseModel):
     tien_mat: float = 0
     tien_ngan_hang: float = 0
@@ -39,10 +40,7 @@ class KhoiTaoDauKyRequest(BaseModel):
     ngay: Optional[str] = None
     ton_kho: List[TonKhoDauKy]
     quy_nhan_vien: List[QuyNhanVienDauKy]
-
-    # 🔥 FIX 422: từ float → object
     quy_cong_ty: QuyCongTyDauKy
-
     cong_no_khach: List[CongNoKhachHangDauKy] = Field(default_factory=list)
     cong_no_ncc: List[CongNoNCCDauKy] = Field(default_factory=list)
 
@@ -79,6 +77,14 @@ class HinhThuc(str, Enum):
 class DoiTuong(str, Enum):
     cong_ty = "cong_ty"
     nhan_vien = "nhan_vien"
+
+
+# 🔥 NEW ENUM (PHÁT SINH)
+
+class TrangThaiPhatSinh(str, Enum):
+    nhap = "nhap"
+    xac_nhan = "xac_nhan"
+    huy = "huy"
 
 
 # =====================================================
@@ -153,7 +159,6 @@ class HoaDonNhapCreate(BaseModel):
     items: List[HoaDonNhapItemCreate]
     tong_tien: float
     force: Optional[bool] = False
-    
 
 
 class HoaDonNhapResponse(BaseModel):
@@ -201,7 +206,7 @@ class HoaDonBanResponse(BaseModel):
 
 
 # =====================================================
-# THU CHI
+# THU CHI (GIỮ NGUYÊN)
 # =====================================================
 
 class ThuChiCreate(BaseModel):
@@ -210,14 +215,13 @@ class ThuChiCreate(BaseModel):
     so_tien: float
     hinh_thuc: Literal["tien_mat", "chuyen_khoan"]
 
-    # giữ nhưng không dùng
     ma_kh: Optional[str] = None
     ma_ncc: Optional[str] = None
 
     noi_dung: Optional[str] = None
     idempotency_key: Optional[str] = None
-    # 🔥 THÊM DÒNG NÀY
     force: Optional[bool] = False
+
     @field_validator("so_tien")
     @classmethod
     def validate_so_tien(cls, v):
@@ -228,7 +232,6 @@ class ThuChiCreate(BaseModel):
     @model_validator(mode="after")
     def validate_logic(self):
 
-        # chỉ giữ rule đúng
         if self.loai_giao_dich == "nop_tien":
             if self.loai != "chi":
                 raise ValueError("Nộp tiền phải là chi")
@@ -240,12 +243,55 @@ class ThuChiCreate(BaseModel):
         return self
 
 
-
-
-
 class ThuChiResponse(ThuChiCreate):
     id: int
     ma_nv: Optional[str] = None
+
+    class Config:
+        orm_mode = True
+
+
+# =====================================================
+# 🔥 PHÁT SINH (NEW - CORE ERP)
+# =====================================================
+
+class PhatSinhCreate(BaseModel):
+    ngay: date
+    loai: Literal["thu", "chi"]
+    loai_giao_dich: str
+    so_tien: float
+    dien_giai: Optional[str] = None
+
+    @field_validator("so_tien")
+    @classmethod
+    def validate_so_tien(cls, v):
+        if v <= 0:
+            raise ValueError("Số tiền phải > 0")
+        return v
+
+
+class PhatSinhConfirm(BaseModel):
+    id: int
+
+
+class PhatSinhCancel(BaseModel):
+    id: int
+
+
+class PhatSinhResponse(BaseModel):
+    id: int
+    ma_nv: str
+    ngay: date
+    loai: str
+    loai_giao_dich: Optional[str]
+    so_tien: float
+    dien_giai: Optional[str]
+    trang_thai: TrangThaiPhatSinh
+
+    id_thu_chi: Optional[int]
+    id_thu_chi_dao: Optional[int]
+
+    created_at: Optional[datetime]
 
     class Config:
         orm_mode = True
