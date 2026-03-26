@@ -4,7 +4,7 @@ from datetime import datetime
 import enum
 
 # =========================
-# ENUM (CHỈ DÙNG CHO SCHEMA, KHÔNG DÙNG DB)
+# ENUM KHỚP THU_CHI
 # =========================
 
 class LoaiPhatSinh(str, enum.Enum):
@@ -19,7 +19,7 @@ class TrangThaiPhatSinh(str, enum.Enum):
 
 
 # =========================
-# MODEL PHÁT SINH (FIX CHUẨN)
+# MODEL PHÁT SINH
 # =========================
 
 class PhatSinh(Base):
@@ -42,8 +42,12 @@ class PhatSinh(Base):
         server_default=func.now()
     )
 
-    # 🔥 FIX QUAN TRỌNG NHẤT
-    loai = Column(String(10), nullable=False, index=True)
+    # 🔥 FIX 1: ENUM → STRING
+    loai = Column(
+        String(10),
+        nullable=False,
+        index=True
+    )
 
     loai_giao_dich = Column(String(50), nullable=True)
 
@@ -58,11 +62,11 @@ class PhatSinh(Base):
     # CORE ERP
     # =========================
 
-    # 🔥 FIX ENUM → STRING
+    # 🔥 FIX 2: ENUM → STRING
     trang_thai = Column(
         String(20),
         nullable=False,
-        server_default="nhap",
+        server_default=text("'nhap'"),
         index=True
     )
 
@@ -97,9 +101,8 @@ class PhatSinh(Base):
 
 
 # ======================
-# CÁC MODEL KHÁC GIỮ NGUYÊN
+# NHÂN VIÊN
 # ======================
-
 class NhanVien(Base):
     __tablename__ = "nhan_vien"
 
@@ -112,4 +115,94 @@ class NhanVien(Base):
     ngay_tao = Column(DateTime, default=datetime.utcnow)
 
 
-# (các model dưới giữ nguyên y như file sếp)
+# ======================
+# KHO
+# ======================
+class KhoHang(Base):
+    __tablename__ = "kho_hang"
+
+    id = Column(Integer, primary_key=True)
+    ma_kho = Column(String(20), unique=True, nullable=False)
+    ten_kho = Column(String(255))
+    ngay_tao = Column(DateTime, default=datetime.utcnow)
+
+
+# ======================
+# NHÂN VIÊN - KHO
+# ======================
+class NhanVienKho(Base):
+    __tablename__ = "nhan_vien_kho"
+
+    id = Column(Integer, primary_key=True)
+    ma_nv = Column(String(50), ForeignKey("nhan_vien.ma_nv"))
+    ma_kho = Column(String(20), ForeignKey("kho_hang.ma_kho"))
+
+
+# ======================
+# KHÁCH HÀNG
+# ======================
+class KhachHang(Base):
+    __tablename__ = "khach_hang"
+
+    id = Column(Integer, primary_key=True)
+    ma_kh = Column(String(50), unique=True, nullable=False)
+    ten_cua_hang = Column(String(255))
+    ten_cua_hang_chi_tiet = Column(String(255))
+    dia_chi = Column(String(255))
+    so_dien_thoai = Column(String(20))
+    ma_so_thue = Column(String(50))
+    ghi_chu = Column(String(255))
+    ngay_tao = Column(DateTime, default=datetime.utcnow)
+
+
+# ======================
+# NHÀ CUNG CẤP
+# ======================
+class NhaCungCap(Base):
+    __tablename__ = "nha_cung_cap"
+
+    id = Column(Integer, primary_key=True)
+    ma_ncc = Column(String(50), unique=True, nullable=False)
+    ten_ncc = Column(String(255))
+    dia_chi = Column(String(255))
+    so_dien_thoai = Column(String(20))
+    ma_so_thue = Column(String(50))
+    email = Column(String(255))
+    ngay_tao = Column(DateTime, default=datetime.utcnow)
+
+
+# ======================
+# SẢN PHẨM
+# ======================
+class SanPham(Base):
+    __tablename__ = "san_pham"
+
+    id = Column(Integer, primary_key=True)
+    ma_sp = Column(String(50), unique=True, nullable=False)
+    ten_sp = Column(String(255))
+    loai_san_pham = Column(Enum("gas_binh","gas_kg","gas_mini","khac"))
+    don_vi_tinh = Column(Enum("binh","kg","lon","cai"))
+    dung_tich_kg = Column(DECIMAL(6,2))
+    ngay_tao = Column(DateTime, default=datetime.utcnow)
+
+
+# ======================
+# HÓA ĐƠN NHẬP (GIỮ NGUYÊN)
+# ======================
+class HoaDonNhap(Base):
+    __tablename__ = "hoa_don_nhap"
+
+    id = Column(Integer, primary_key=True)
+    ngay = Column(Date)
+
+    ma_ncc = Column(String(50), ForeignKey("nha_cung_cap.ma_ncc"))
+    ma_nv = Column(String(50), ForeignKey("nhan_vien.ma_nv"))
+    ma_kho = Column(String(20), ForeignKey("kho_hang.ma_kho"))
+
+    tong_tien = Column(DECIMAL(18,2))
+    tien_mat = Column(DECIMAL(18,2))
+    tien_ck = Column(DECIMAL(18,2))
+    tong_thanh_toan = Column(DECIMAL(18,2))
+
+    trang_thai = Column(Enum("nhap","xac_nhan","chot","huy"))
+    ngay_tao = Column(DateTime, default=datetime.utcnow)
