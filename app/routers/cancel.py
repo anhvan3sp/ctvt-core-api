@@ -2,7 +2,6 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from datetime import datetime, date
-from decimal import Decimal
 
 from app.database import get_db
 from app.auth_utils import get_current_user
@@ -18,8 +17,6 @@ from app.models import (
     QuyCongTyChotNgay,
     CongNoKhachHang,
     CongNoKhachHangLog,
-    CongNoNCC,
-    CongNoNCCLog,
     KhachHang,
     SanPham
 )
@@ -134,7 +131,6 @@ def get_today_transactions(
     )
 
     for t in thu_chi:
-
         result.append({
             "id": t.id,
             "loai": "thu_chi",
@@ -148,7 +144,7 @@ def get_today_transactions(
                 }
             ],
             "tong_tien": float(t.so_tien),
-            "trang_thai": "active"
+            "trang_thai": "huy" if t.is_reversal else "active"
         })
 
     return result
@@ -223,7 +219,11 @@ def cancel_transaction(
                     so_tien=hoa_don.tien_mat,
                     loai="chi",
                     hinh_thuc="tien_mat",
-                    loai_giao_dich="huy_ban"
+                    loai_giao_dich="ban_hang",  # ✅ FIX
+                    noi_dung="HUỶ HOÁ ĐƠN BÁN",
+                    is_reversal=1,
+                    ref_id=hoa_don.id,
+                    created_by=user.ma_nv
                 ))
 
             if hoa_don.tien_ck > 0:
@@ -236,22 +236,11 @@ def cancel_transaction(
                     so_tien=hoa_don.tien_ck,
                     loai="chi",
                     hinh_thuc="chuyen_khoan",
-                    loai_giao_dich="huy_ban"
-                ))
-
-            cn = db.query(CongNoKhachHang)\
-                .filter_by(ma_kh=hoa_don.ma_kh)\
-                .with_for_update()\
-                .first()
-
-            if cn:
-                cn.so_du -= hoa_don.no_lai
-
-                db.add(CongNoKhachHangLog(
-                    ma_kh=hoa_don.ma_kh,
-                    ngay=datetime.now(),
-                    phat_sinh=-hoa_don.no_lai,
-                    loai="huy_ban"
+                    loai_giao_dich="ban_hang",  # ✅ FIX
+                    noi_dung="HUỶ HOÁ ĐƠN BÁN",
+                    is_reversal=1,
+                    ref_id=hoa_don.id,
+                    created_by=user.ma_nv
                 ))
 
             hoa_don.trang_thai = "huy"
@@ -308,6 +297,14 @@ def cancel_transaction(
             if not record:
                 raise HTTPException(404, "Không tìm thấy")
 
+            existed = db.query(ThuChi).filter(
+                ThuChi.ref_id == record.id,
+                ThuChi.is_reversal == 1
+            ).first()
+
+            if existed:
+                raise HTTPException(400, "Đã huỷ trước đó")
+
             quy_ct = db.query(QuyCongTyChotNgay)\
                 .with_for_update()\
                 .first()
@@ -320,19 +317,12 @@ def cancel_transaction(
             so_tien = record.so_tien
 
             if record.loai == "chi":
-                if record.hinh_thuc == "tien_mat":
-                    quy_nv.so_du += so_tien
-                else:
-                    quy_ct.tien_ngan_hang += so_tien
-
+                quy_nv.so_du += so_tien if record.hinh_thuc == "tien_mat" else 0
+                quy_ct.tien_ngan_hang += so_tien if record.hinh_thuc != "tien_mat" else 0
                 loai_moi = "thu"
-
             else:
-                if record.hinh_thuc == "tien_mat":
-                    quy_nv.so_du -= so_tien
-                else:
-                    quy_ct.tien_ngan_hang -= so_tien
-
+                quy_nv.so_du -= so_tien if record.hinh_thuc == "tien_mat" else 0
+                quy_ct.tien_ngan_hang -= so_tien if record.hinh_thuc != "tien_mat" else 0
                 loai_moi = "chi"
 
             db.add(ThuChi(
@@ -342,7 +332,10 @@ def cancel_transaction(
                 so_tien=so_tien,
                 loai=loai_moi,
                 hinh_thuc=record.hinh_thuc,
-                loai_giao_dich="huy_" + (record.loai_giao_dich or "khac"),
+                loai_giao_dich=record.loai_giao_dich,  # ✅ FIX
+                noi_dung="HUỶ: " + (record.noi_dung or ""),
+                is_reversal=1,
+                ref_id=record.id,
                 created_by=user.ma_nv
             ))
 
