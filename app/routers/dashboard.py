@@ -10,7 +10,7 @@ from app.models import (
     QuyNhanVienChotNgay,
     ThuChi,
     SanPham,
-    NhanVien   # 🔥 thêm
+    NhanVien
 )
 from app.auth_utils import get_current_user
 
@@ -64,15 +64,17 @@ def dashboard(
         ]
 
     # =========================
-    # THU / CHI TRONG NGÀY
+    # THU / CHI TRONG NGÀY (🔥 FIX)
     # =========================
 
     def get_thu_chi(filter_nv):
 
+        # 🔥 chỉ lấy giao dịch KHÔNG phải reversal
         thu = db.query(
             func.coalesce(func.sum(ThuChi.so_tien), 0)
         ).filter(
             ThuChi.loai == "thu",
+            ThuChi.is_reversal == 0,
             ThuChi.ngay >= start,
             ThuChi.ngay < end,
             *filter_nv
@@ -82,6 +84,7 @@ def dashboard(
             func.coalesce(func.sum(ThuChi.so_tien), 0)
         ).filter(
             ThuChi.loai == "chi",
+            ThuChi.is_reversal == 0,
             ThuChi.ngay >= start,
             ThuChi.ngay < end,
             *filter_nv
@@ -108,8 +111,8 @@ def dashboard(
 
         return {
             "loai": "cong_ty",
-            "ten_nv": ten_nv,            # 🔥 dùng tên thật
-            "vai_tro": user.vai_tro,     # 🔥 thêm role
+            "ten_nv": ten_nv,
+            "vai_tro": user.vai_tro,
             "ban_hom_nay": float(ban_hom_nay),
             "ban_theo_loai": ban_theo_loai,
             "tien_mat": tien_mat,
@@ -142,8 +145,8 @@ def dashboard(
 
         return {
             "loai": "nhan_vien",
-            "ten_nv": ten_nv,            # 🔥 dùng tên thật
-            "vai_tro": user.vai_tro,     # 🔥 thêm role
+            "ten_nv": ten_nv,
+            "vai_tro": user.vai_tro,
             "ban_hom_nay": float(ban_hom_nay),
             "ban_theo_loai": ban_theo_loai,
             "so_du": so_du,
