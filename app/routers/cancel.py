@@ -219,7 +219,7 @@ def cancel_transaction(
                     so_tien=hoa_don.tien_mat,
                     loai="chi",
                     hinh_thuc="tien_mat",
-                    loai_giao_dich="ban_hang",  # ✅ FIX
+                    loai_giao_dich="ban_hang",
                     noi_dung="HUỶ HOÁ ĐƠN BÁN",
                     is_reversal=1,
                     ref_id=hoa_don.id,
@@ -236,7 +236,7 @@ def cancel_transaction(
                     so_tien=hoa_don.tien_ck,
                     loai="chi",
                     hinh_thuc="chuyen_khoan",
-                    loai_giao_dich="ban_hang",  # ✅ FIX
+                    loai_giao_dich="ban_hang",
                     noi_dung="HUỶ HOÁ ĐƠN BÁN",
                     is_reversal=1,
                     ref_id=hoa_don.id,
@@ -285,7 +285,7 @@ def cancel_transaction(
             hoa_don.trang_thai = "huy"
 
         # =========================
-        # THU CHI
+        # THU CHI (🔥 FIX CHÍNH Ở ĐÂY)
         # =========================
         elif loai == "thu_chi":
 
@@ -316,14 +316,33 @@ def cancel_transaction(
 
             so_tien = record.so_tien
 
-            if record.loai == "chi":
-                quy_nv.so_du += so_tien if record.hinh_thuc == "tien_mat" else 0
-                quy_ct.tien_ngan_hang += so_tien if record.hinh_thuc != "tien_mat" else 0
-                loai_moi = "thu"
+            # 🔥 FIX: xử lý theo đúng đối tượng
+            if record.doi_tuong == "nhan_vien":
+
+                if record.loai == "chi":
+                    quy_nv.so_du += so_tien
+                    loai_moi = "thu"
+                else:
+                    quy_nv.so_du -= so_tien
+                    loai_moi = "chi"
+
+            elif record.doi_tuong == "cong_ty":
+
+                if record.loai == "chi":
+                    if record.hinh_thuc == "tien_mat":
+                        quy_ct.tien_mat += so_tien
+                    else:
+                        quy_ct.tien_ngan_hang += so_tien
+                    loai_moi = "thu"
+                else:
+                    if record.hinh_thuc == "tien_mat":
+                        quy_ct.tien_mat -= so_tien
+                    else:
+                        quy_ct.tien_ngan_hang -= so_tien
+                    loai_moi = "chi"
+
             else:
-                quy_nv.so_du -= so_tien if record.hinh_thuc == "tien_mat" else 0
-                quy_ct.tien_ngan_hang -= so_tien if record.hinh_thuc != "tien_mat" else 0
-                loai_moi = "chi"
+                raise HTTPException(400, "Đối tượng không hợp lệ")
 
             db.add(ThuChi(
                 ngay=datetime.now(),
@@ -332,7 +351,7 @@ def cancel_transaction(
                 so_tien=so_tien,
                 loai=loai_moi,
                 hinh_thuc=record.hinh_thuc,
-                loai_giao_dich=record.loai_giao_dich,  # ✅ FIX
+                loai_giao_dich=record.loai_giao_dich,
                 noi_dung="HUỶ: " + (record.noi_dung or ""),
                 is_reversal=1,
                 ref_id=record.id,
