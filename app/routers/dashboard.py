@@ -68,16 +68,16 @@ def dashboard(
         ]
 
     # =========================
-    # THU / CHI TRONG NGÀY
+    # THU / CHI TRONG NGÀY (🔥 FIX CHUẨN)
     # =========================
 
     def get_thu_chi(filter_nv):
 
+        # 🔥 KHÔNG filter is_reversal → để ledger tự cân
         thu = db.query(
             func.coalesce(func.sum(ThuChi.so_tien), 0)
         ).filter(
             ThuChi.loai == "thu",
-            ThuChi.is_reversal == 0,
             ThuChi.ngay >= start,
             ThuChi.ngay < end,
             *filter_nv
@@ -87,7 +87,6 @@ def dashboard(
             func.coalesce(func.sum(ThuChi.so_tien), 0)
         ).filter(
             ThuChi.loai == "chi",
-            ThuChi.is_reversal == 0,
             ThuChi.ngay >= start,
             ThuChi.ngay < end,
             *filter_nv
