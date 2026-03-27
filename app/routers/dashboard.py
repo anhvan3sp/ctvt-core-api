@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, case
 from datetime import datetime, timedelta
 
 from app.database import get_db
@@ -39,18 +39,22 @@ def dashboard(
     ten_nv = nv.ten_nv if nv else user.ma_nv
 
     # =========================
-    # PHÂN LOẠI BÁN THEO SẢN PHẨM
+    # PHÂN LOẠI BÁN THEO SẢN PHẨM (🔥 FIX CHUẨN)
     # =========================
 
     def get_ban_theo_loai(query_filter):
 
         rows = db.query(
             SanPham.ten_sp,
-            func.sum(NhatKyKho.so_luong)
+            func.sum(
+                case(
+                    (NhatKyKho.loai == "xuat", NhatKyKho.so_luong),
+                    else_=-NhatKyKho.so_luong
+                )
+            )
         ).join(
             SanPham, NhatKyKho.ma_sp == SanPham.ma_sp
         ).filter(
-            NhatKyKho.loai == "xuat",
             NhatKyKho.ngay >= start,
             NhatKyKho.ngay < end,
             *query_filter
@@ -60,16 +64,15 @@ def dashboard(
             {
                 "ten": r[0],
                 "so_luong": float(r[1] or 0)
-            } for r in rows
+            } for r in rows if (r[1] or 0) > 0
         ]
 
     # =========================
-    # THU / CHI TRONG NGÀY (🔥 FIX)
+    # THU / CHI TRONG NGÀY
     # =========================
 
     def get_thu_chi(filter_nv):
 
-        # 🔥 chỉ lấy giao dịch KHÔNG phải reversal
         thu = db.query(
             func.coalesce(func.sum(ThuChi.so_tien), 0)
         ).filter(
