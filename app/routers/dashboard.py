@@ -27,8 +27,7 @@ def dashboard(
 ):
 
     now = datetime.utcnow() + timedelta(hours=7)
-    start = datetime(now.year, now.month, now.day)
-    end = start + timedelta(days=1)
+    today = now.date()
 
     nv = db.query(NhanVien).filter(
         NhanVien.ma_nv == user.ma_nv
@@ -52,8 +51,7 @@ def dashboard(
         ).join(
             SanPham, NhatKyKho.ma_sp == SanPham.ma_sp
         ).filter(
-            NhatKyKho.ngay >= start,
-            NhatKyKho.ngay < end,
+            func.date(NhatKyKho.ngay) == today,
             *query_filter
         ).group_by(SanPham.ten_sp).all()
 
@@ -65,7 +63,7 @@ def dashboard(
         ]
 
     # =========================
-    # DOANH THU (🔥 từ hoá đơn)
+    # DOANH THU (🔥 FIX CHUẨN)
     # =========================
     def get_doanh_thu(filter_nv):
 
@@ -73,13 +71,12 @@ def dashboard(
             func.coalesce(func.sum(HoaDonBan.tong_thanh_toan), 0)
         ).filter(
             HoaDonBan.trang_thai == "xac_nhan",
-            HoaDonBan.ngay >= start,
-            HoaDonBan.ngay < end,
+            func.date(HoaDonBan.ngay) == today,
             *filter_nv
         ).scalar() or 0
 
     # =========================
-    # CHI PHÍ (🔥 nhập + phát sinh)
+    # CHI PHÍ (🔥 FIX CHUẨN)
     # =========================
     def get_chi_phi(filter_nv):
 
@@ -87,8 +84,7 @@ def dashboard(
             func.coalesce(func.sum(HoaDonNhap.tong_tien), 0)
         ).filter(
             HoaDonNhap.trang_thai == "xac_nhan",
-            HoaDonNhap.ngay >= start,
-            HoaDonNhap.ngay < end,
+            func.date(HoaDonNhap.ngay) == today,
             *filter_nv
         ).scalar() or 0
 
@@ -97,8 +93,7 @@ def dashboard(
         ).filter(
             PhatSinh.trang_thai == "xac_nhan",
             PhatSinh.loai == "chi",
-            PhatSinh.ngay >= start,
-            PhatSinh.ngay < end,
+            func.date(PhatSinh.ngay) == today,
             *filter_nv
         ).scalar() or 0
 
@@ -111,15 +106,13 @@ def dashboard(
 
         thu = db.query(func.coalesce(func.sum(ThuChi.so_tien), 0)).filter(
             ThuChi.loai == "thu",
-            ThuChi.ngay >= start,
-            ThuChi.ngay < end,
+            func.date(ThuChi.ngay) == today,
             *filter_nv
         ).scalar() or 0
 
         chi = db.query(func.coalesce(func.sum(ThuChi.so_tien), 0)).filter(
             ThuChi.loai == "chi",
-            ThuChi.ngay >= start,
-            ThuChi.ngay < end,
+            func.date(ThuChi.ngay) == today,
             *filter_nv
         ).scalar() or 0
 
@@ -152,11 +145,9 @@ def dashboard(
             "ban_hom_nay": float(ban_hom_nay),
             "ban_theo_loai": ban_theo_loai,
 
-            # 🔥 chuẩn tài chính
             "doanh_thu": float(doanh_thu),
             "chi_phi": float(chi_phi),
 
-            # 🔥 dòng tiền
             "thu_tien": thu_tien,
             "chi_tien": chi_tien,
 
