@@ -23,24 +23,15 @@ def dashboard(
     user = Depends(get_current_user)
 ):
 
-    # TIME VN
     now = datetime.utcnow() + timedelta(hours=7)
     start = datetime(now.year, now.month, now.day)
     end = start + timedelta(days=1)
-
-    # =========================
-    # LẤY TÊN NHÂN VIÊN
-    # =========================
 
     nv = db.query(NhanVien).filter(
         NhanVien.ma_nv == user.ma_nv
     ).first()
 
     ten_nv = nv.ten_nv if nv else user.ma_nv
-
-    # =========================
-    # PHÂN LOẠI BÁN THEO SẢN PHẨM (🔥 FIX CHUẨN)
-    # =========================
 
     def get_ban_theo_loai(query_filter):
 
@@ -67,40 +58,30 @@ def dashboard(
             } for r in rows if (r[1] or 0) > 0
         ]
 
-    # =========================
-    # THU / CHI TRONG NGÀY (🔥 FIX CHUẨN)
-    # =========================
-
+    # 🔥 FIX CHUẨN NHẤT
     def get_thu_chi(filter_nv):
 
-        # 🔥 KHÔNG filter is_reversal → để ledger tự cân
-        thu = db.query(
-            func.coalesce(func.sum(ThuChi.so_tien), 0)
+        net = db.query(
+            func.coalesce(func.sum(
+                case(
+                    (ThuChi.loai == "thu", ThuChi.so_tien),
+                    else_=-ThuChi.so_tien
+                )
+            ), 0)
         ).filter(
-            ThuChi.loai == "thu",
             ThuChi.ngay >= start,
             ThuChi.ngay < end,
             *filter_nv
         ).scalar() or 0
 
-        chi = db.query(
-            func.coalesce(func.sum(ThuChi.so_tien), 0)
-        ).filter(
-            ThuChi.loai == "chi",
-            ThuChi.ngay >= start,
-            ThuChi.ngay < end,
-            *filter_nv
-        ).scalar() or 0
+        if net >= 0:
+            return float(net), 0.0
+        else:
+            return 0.0, float(-net)
 
-        return float(thu), float(chi)
-
-    # =========================
-    # ADMIN
-    # =========================
     if user.ma_nv == "admin":
 
         ban_theo_loai = get_ban_theo_loai([])
-
         ban_hom_nay = sum(x["so_luong"] for x in ban_theo_loai)
 
         thu, chi = get_thu_chi([])
@@ -124,9 +105,6 @@ def dashboard(
             "chi_hom_nay": chi
         }
 
-    # =========================
-    # NHÂN VIÊN
-    # =========================
     else:
 
         ban_theo_loai = get_ban_theo_loai([
