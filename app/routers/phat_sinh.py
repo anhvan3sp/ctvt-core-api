@@ -57,39 +57,45 @@ def confirm_phat_sinh(
     user=Depends(get_current_user)
 ):
     try:
-        with db.begin():
+        # ===== LOCK =====
+        ps = db.execute(
+            select(PhatSinh)
+            .where(PhatSinh.id == data.id)
+            .with_for_update()
+        ).scalar_one_or_none()
 
-            # ===== LOCK =====
-            ps = db.execute(
-                select(PhatSinh)
-                .where(PhatSinh.id == data.id)
-                .with_for_update()
-            ).scalar_one_or_none()
+        if not ps:
+            raise HTTPException(404, "Không tìm thấy")
 
-            if not ps:
-                raise HTTPException(404, "Không tìm thấy")
+        # idempotent (double click / multi device)
+        if ps.trang_thai == TrangThaiPhatSinh.XAC_NHAN:
+            return {
+                "msg": "ALREADY_CONFIRMED"
+            }
 
-            if ps.trang_thai != TrangThaiPhatSinh.NHAP:
-                raise HTTPException(400, "Đã xác nhận hoặc huỷ")
+        if ps.trang_thai != TrangThaiPhatSinh.NHAP:
+            raise HTTPException(400, "Đã xác nhận hoặc huỷ")
 
-            # ===== IDEMPOTENCY =====
-            idem_key = f"ps_confirm_{ps.id}"
+        # ===== IDEMPOTENCY =====
+        idem_key = f"ps_confirm_{ps.id}"
 
-            # ===== CALL THU_CHI =====
-            tc_data = ThuChiCreate(
-                loai=ps.loai,
-                loai_giao_dich=ps.loai_giao_dich,
-                so_tien=float(ps.so_tien),
-                hinh_thuc="tien_mat",
-                noi_dung=f"PS #{ps.id} - {ps.dien_giai or ''}",
-                idempotency_key=idem_key
-            )
+        # ===== CALL THU_CHI =====
+        tc_data = ThuChiCreate(
+            loai=ps.loai,
+            loai_giao_dich=ps.loai_giao_dich,
+            so_tien=float(ps.so_tien),
+            hinh_thuc="tien_mat",
+            noi_dung=f"PS #{ps.id} - {ps.dien_giai or ''}",
+            idempotency_key=idem_key
+        )
 
-            result = create_thu_chi(tc_data, db, user)
+        result = create_thu_chi(tc_data, db, user)
 
-            # ===== UPDATE =====
-            ps.trang_thai = TrangThaiPhatSinh.XAC_NHAN
-            ps.idempotency_key = idem_key
+        # ===== UPDATE =====
+        ps.trang_thai = TrangThaiPhatSinh.XAC_NHAN
+        ps.idempotency_key = idem_key
+
+        db.commit()
 
     except HTTPException as e:
         db.rollback()
@@ -115,37 +121,42 @@ def cancel_phat_sinh(
     user=Depends(get_current_user)
 ):
     try:
-        with db.begin():
+        ps = db.execute(
+            select(PhatSinh)
+            .where(PhatSinh.id == data.id)
+            .with_for_update()
+        ).scalar_one_or_none()
 
-            ps = db.execute(
-                select(PhatSinh)
-                .where(PhatSinh.id == data.id)
-                .with_for_update()
-            ).scalar_one_or_none()
+        if not ps:
+            raise HTTPException(404, "Không tìm thấy")
 
-            if not ps:
-                raise HTTPException(404, "Không tìm thấy")
+        if ps.trang_thai == TrangThaiPhatSinh.HUY:
+            return {
+                "msg": "ALREADY_CANCELED"
+            }
 
-            if ps.trang_thai != TrangThaiPhatSinh.XAC_NHAN:
-                raise HTTPException(400, "Chỉ huỷ khi đã xác nhận")
+        if ps.trang_thai != TrangThaiPhatSinh.XAC_NHAN:
+            raise HTTPException(400, "Chỉ huỷ khi đã xác nhận")
 
-            # ===== ĐẢO LOẠI =====
-            loai_dao = "thu" if ps.loai == "chi" else "chi"
+        # ===== ĐẢO LOẠI =====
+        loai_dao = "thu" if ps.loai == "chi" else "chi"
 
-            idem_key = f"ps_cancel_{ps.id}"
+        idem_key = f"ps_cancel_{ps.id}"
 
-            tc_data = ThuChiCreate(
-                loai=loai_dao,
-                loai_giao_dich=ps.loai_giao_dich,
-                so_tien=float(ps.so_tien),
-                hinh_thuc="tien_mat",
-                noi_dung=f"HUY PS #{ps.id}",
-                idempotency_key=idem_key
-            )
+        tc_data = ThuChiCreate(
+            loai=loai_dao,
+            loai_giao_dich=ps.loai_giao_dich,
+            so_tien=float(ps.so_tien),
+            hinh_thuc="tien_mat",
+            noi_dung=f"HUY PS #{ps.id}",
+            idempotency_key=idem_key
+        )
 
-            result = create_thu_chi(tc_data, db, user)
+        result = create_thu_chi(tc_data, db, user)
 
-            ps.trang_thai = TrangThaiPhatSinh.HUY
+        ps.trang_thai = TrangThaiPhatSinh.HUY
+
+        db.commit()
 
     except HTTPException as e:
         db.rollback()
