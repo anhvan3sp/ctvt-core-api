@@ -26,8 +26,8 @@ def dashboard(
     user = Depends(get_current_user)
 ):
 
-    # 🔥 FIX CHUẨN TIME (KHÔNG DÙNG date())
-    now = datetime.utcnow() + timedelta(hours=7)
+    # 🔥 FIX CHUẨN TIME (UTC)
+    now = datetime.utcnow()
     start = datetime(now.year, now.month, now.day)
     end = start + timedelta(days=1)
 
