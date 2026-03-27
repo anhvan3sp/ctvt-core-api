@@ -26,8 +26,10 @@ def dashboard(
     user = Depends(get_current_user)
 ):
 
+    # 🔥 FIX CHUẨN TIME (KHÔNG DÙNG date())
     now = datetime.utcnow() + timedelta(hours=7)
-    today = now.date()
+    start = datetime(now.year, now.month, now.day)
+    end = start + timedelta(days=1)
 
     nv = db.query(NhanVien).filter(
         NhanVien.ma_nv == user.ma_nv
@@ -51,7 +53,8 @@ def dashboard(
         ).join(
             SanPham, NhatKyKho.ma_sp == SanPham.ma_sp
         ).filter(
-            func.date(NhatKyKho.ngay) == today,
+            NhatKyKho.ngay >= start,
+            NhatKyKho.ngay < end,
             *query_filter
         ).group_by(SanPham.ten_sp).all()
 
@@ -63,7 +66,7 @@ def dashboard(
         ]
 
     # =========================
-    # DOANH THU (🔥 FIX CHUẨN)
+    # DOANH THU
     # =========================
     def get_doanh_thu(filter_nv):
 
@@ -71,12 +74,13 @@ def dashboard(
             func.coalesce(func.sum(HoaDonBan.tong_thanh_toan), 0)
         ).filter(
             HoaDonBan.trang_thai == "xac_nhan",
-            func.date(HoaDonBan.ngay) == today,
+            HoaDonBan.ngay >= start,
+            HoaDonBan.ngay < end,
             *filter_nv
         ).scalar() or 0
 
     # =========================
-    # CHI PHÍ (🔥 FIX CHUẨN)
+    # CHI PHÍ
     # =========================
     def get_chi_phi(filter_nv):
 
@@ -84,7 +88,8 @@ def dashboard(
             func.coalesce(func.sum(HoaDonNhap.tong_tien), 0)
         ).filter(
             HoaDonNhap.trang_thai == "xac_nhan",
-            func.date(HoaDonNhap.ngay) == today,
+            HoaDonNhap.ngay >= start,
+            HoaDonNhap.ngay < end,
             *filter_nv
         ).scalar() or 0
 
@@ -93,26 +98,29 @@ def dashboard(
         ).filter(
             PhatSinh.trang_thai == "xac_nhan",
             PhatSinh.loai == "chi",
-            func.date(PhatSinh.ngay) == today,
+            PhatSinh.ngay >= start,
+            PhatSinh.ngay < end,
             *filter_nv
         ).scalar() or 0
 
         return float(nhap + phat_sinh)
 
     # =========================
-    # DÒNG TIỀN (ledger)
+    # DÒNG TIỀN
     # =========================
     def get_cashflow(filter_nv):
 
         thu = db.query(func.coalesce(func.sum(ThuChi.so_tien), 0)).filter(
             ThuChi.loai == "thu",
-            func.date(ThuChi.ngay) == today,
+            ThuChi.ngay >= start,
+            ThuChi.ngay < end,
             *filter_nv
         ).scalar() or 0
 
         chi = db.query(func.coalesce(func.sum(ThuChi.so_tien), 0)).filter(
             ThuChi.loai == "chi",
-            func.date(ThuChi.ngay) == today,
+            ThuChi.ngay >= start,
+            ThuChi.ngay < end,
             *filter_nv
         ).scalar() or 0
 
