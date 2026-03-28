@@ -103,7 +103,7 @@ def dashboard(
     def get_chi(filter_nv):
 
         chi_nhap = db.query(
-            func.coalesce(func.sum(HoaDonNhap.tong_tien), 0)
+            func.coalesce(func.sum(HoaDonNhap.tien_mat), 0)
         ).filter(
             HoaDonNhap.trang_thai == "xac_nhan",
             HoaDonNhap.ngay >= start,
