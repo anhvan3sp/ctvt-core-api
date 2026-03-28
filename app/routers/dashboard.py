@@ -10,6 +10,7 @@ from app.models import (
     SanPham,
     NhanVien,
     HoaDonBan,
+    HoaDonBanChiTiet,   # 🔥 QUAN TRỌNG
     HoaDonNhap,
     PhatSinh
 )
@@ -17,12 +18,10 @@ from app.auth_utils import get_current_user
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
-
 # =========================
 # TIME VIỆT NAM (CHUẨN)
 # =========================
 VN_TZ = timezone(timedelta(hours=7))
-
 
 def get_range_today():
     now = datetime.now(VN_TZ)
@@ -38,6 +37,9 @@ def dashboard(
 ):
     start, end = get_range_today()
 
+    # =========================
+    # LẤY TÊN NV
+    # =========================
     nv = db.query(NhanVien).filter(
         NhanVien.ma_nv == user.ma_nv
     ).first()
@@ -45,15 +47,17 @@ def dashboard(
     ten_nv = nv.ten_nv if nv else user.ma_nv
 
     # =========================
-    # BÁN (CHUẨN ERP - từ hóa đơn)
+    # BÁN THEO LOẠI (FIX CHUẨN)
     # =========================
     def get_ban_theo_loai(filter_nv):
 
         rows = db.query(
             SanPham.ten_sp,
-            func.coalesce(func.sum(HoaDonBan.so_luong), 0)
+            func.coalesce(func.sum(HoaDonBanChiTiet.so_luong), 0)
         ).join(
-            SanPham, HoaDonBan.ma_sp == SanPham.ma_sp
+            HoaDonBan, HoaDonBanChiTiet.id_hoa_don == HoaDonBan.id
+        ).join(
+            SanPham, HoaDonBanChiTiet.ma_sp == SanPham.ma_sp
         ).filter(
             HoaDonBan.trang_thai == "xac_nhan",
             HoaDonBan.ngay >= start,
@@ -69,11 +73,10 @@ def dashboard(
         ]
 
     # =========================
-    # THU (BÁM DOCUMENT)
+    # THU
     # =========================
     def get_thu(filter_nv):
 
-        # từ bán hàng
         thu_ban = db.query(
             func.coalesce(func.sum(HoaDonBan.tong_thanh_toan), 0)
         ).filter(
@@ -83,7 +86,6 @@ def dashboard(
             *filter_nv
         ).scalar() or 0
 
-        # từ phát sinh thu
         thu_ps = db.query(
             func.coalesce(func.sum(PhatSinh.so_tien), 0)
         ).filter(
@@ -97,11 +99,10 @@ def dashboard(
         return float(thu_ban + thu_ps)
 
     # =========================
-    # CHI (BÁM DOCUMENT)
+    # CHI
     # =========================
     def get_chi(filter_nv):
 
-        # nhập hàng
         chi_nhap = db.query(
             func.coalesce(func.sum(HoaDonNhap.tong_tien), 0)
         ).filter(
@@ -111,7 +112,6 @@ def dashboard(
             *filter_nv
         ).scalar() or 0
 
-        # phát sinh chi
         chi_ps = db.query(
             func.coalesce(func.sum(PhatSinh.so_tien), 0)
         ).filter(
@@ -135,15 +135,7 @@ def dashboard(
         thu_tien = get_thu([])
         chi_tien = get_chi([])
 
-        # giữ nguyên field FE
-        doanh_thu = thu_tien
-        chi_phi = chi_tien
-
         quy = db.query(QuyCongTyChotNgay).first()
-
-        tien_mat = float(quy.tien_mat) if quy else 0
-        tien_ngan_hang = float(quy.tien_ngan_hang) if quy else 0
-        tong_quy = float(quy.tong_quy) if quy else 0
 
         return {
             "loai": "cong_ty",
@@ -153,15 +145,15 @@ def dashboard(
             "ban_hom_nay": float(ban_hom_nay),
             "ban_theo_loai": ban_theo_loai,
 
-            "doanh_thu": float(doanh_thu),
-            "chi_phi": float(chi_phi),
+            "doanh_thu": float(thu_tien),
+            "chi_phi": float(chi_tien),
 
             "thu_tien": float(thu_tien),
             "chi_tien": float(chi_tien),
 
-            "tien_mat": tien_mat,
-            "tien_ngan_hang": tien_ngan_hang,
-            "tong_quy": tong_quy
+            "tien_mat": float(quy.tien_mat) if quy else 0,
+            "tien_ngan_hang": float(quy.tien_ngan_hang) if quy else 0,
+            "tong_quy": float(quy.tong_quy) if quy else 0
         }
 
     # =========================
@@ -183,14 +175,9 @@ def dashboard(
             HoaDonNhap.ma_nv == user.ma_nv
         ])
 
-        doanh_thu = thu_tien
-        chi_phi = chi_tien
-
         quy = db.query(QuyNhanVienChotNgay).filter(
             QuyNhanVienChotNgay.ma_nv == user.ma_nv
         ).first()
-
-        so_du = float(quy.so_du) if quy else 0
 
         return {
             "loai": "nhan_vien",
@@ -200,11 +187,11 @@ def dashboard(
             "ban_hom_nay": float(ban_hom_nay),
             "ban_theo_loai": ban_theo_loai,
 
-            "doanh_thu": float(doanh_thu),
-            "chi_phi": float(chi_phi),
+            "doanh_thu": float(thu_tien),
+            "chi_phi": float(chi_tien),
 
             "thu_tien": float(thu_tien),
             "chi_tien": float(chi_tien),
 
-            "so_du": so_du
+            "so_du": float(quy.so_du) if quy else 0
         }
