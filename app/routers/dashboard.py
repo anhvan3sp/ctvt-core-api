@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 from app.database import get_db
 from app.models import (
@@ -10,7 +10,7 @@ from app.models import (
     SanPham,
     NhanVien,
     HoaDonBan,
-    HoaDonBanChiTiet,   # 🔥 QUAN TRỌNG
+    HoaDonBanChiTiet,
     HoaDonNhap,
     PhatSinh
 )
@@ -18,13 +18,12 @@ from app.auth_utils import get_current_user
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
-# =========================
-# TIME VIỆT NAM (CHUẨN)
-# =========================
-VN_TZ = timezone(timedelta(hours=7))
 
+# =========================
+# TIME VIỆT NAM (NAIVE - MATCH DB)
+# =========================
 def get_range_today():
-    now = datetime.now(VN_TZ)
+    now = datetime.now()  # 🔥 KHÔNG timezone
     start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     end = start + timedelta(days=1)
     return start, end
@@ -47,7 +46,7 @@ def dashboard(
     ten_nv = nv.ten_nv if nv else user.ma_nv
 
     # =========================
-    # BÁN THEO LOẠI (FIX CHUẨN)
+    # BÁN THEO LOẠI (JOIN CHI TIẾT)
     # =========================
     def get_ban_theo_loai(filter_nv):
 
