@@ -1,14 +1,12 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from sqlalchemy import func, case
-from datetime import datetime, timedelta
+from sqlalchemy import func
+from datetime import datetime, timedelta, timezone
 
 from app.database import get_db
 from app.models import (
-    NhatKyKho,
     QuyCongTyChotNgay,
     QuyNhanVienChotNgay,
-    ThuChi,
     SanPham,
     NhanVien,
     HoaDonBan,
@@ -20,16 +18,25 @@ from app.auth_utils import get_current_user
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
 
+# =========================
+# TIME VIỆT NAM (CHUẨN)
+# =========================
+VN_TZ = timezone(timedelta(hours=7))
+
+
+def get_range_today():
+    now = datetime.now(VN_TZ)
+    start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    end = start + timedelta(days=1)
+    return start, end
+
+
 @router.get("")
 def dashboard(
     db: Session = Depends(get_db),
-    user = Depends(get_current_user)
+    user=Depends(get_current_user)
 ):
-
-    # 🔥 FIX CHUẨN TIME (UTC)
-    now = datetime.utcnow()
-    start = datetime(now.year, now.month, now.day)
-    end = start + timedelta(days=1)
+    start, end = get_range_today()
 
     nv = db.query(NhanVien).filter(
         NhanVien.ma_nv == user.ma_nv
@@ -38,24 +45,20 @@ def dashboard(
     ten_nv = nv.ten_nv if nv else user.ma_nv
 
     # =========================
-    # BÁN (SỐ BÌNH)
+    # BÁN (CHUẨN ERP - từ hóa đơn)
     # =========================
-    def get_ban_theo_loai(query_filter):
+    def get_ban_theo_loai(filter_nv):
 
         rows = db.query(
             SanPham.ten_sp,
-            func.sum(
-                case(
-                    (NhatKyKho.loai == "xuat", NhatKyKho.so_luong),
-                    else_=-NhatKyKho.so_luong
-                )
-            )
+            func.coalesce(func.sum(HoaDonBan.so_luong), 0)
         ).join(
-            SanPham, NhatKyKho.ma_sp == SanPham.ma_sp
+            SanPham, HoaDonBan.ma_sp == SanPham.ma_sp
         ).filter(
-            NhatKyKho.ngay >= start,
-            NhatKyKho.ngay < end,
-            *query_filter
+            HoaDonBan.trang_thai == "xac_nhan",
+            HoaDonBan.ngay >= start,
+            HoaDonBan.ngay < end,
+            *filter_nv
         ).group_by(SanPham.ten_sp).all()
 
         return [
@@ -66,11 +69,12 @@ def dashboard(
         ]
 
     # =========================
-    # DOANH THU
+    # THU (BÁM DOCUMENT)
     # =========================
-    def get_doanh_thu(filter_nv):
+    def get_thu(filter_nv):
 
-        return db.query(
+        # từ bán hàng
+        thu_ban = db.query(
             func.coalesce(func.sum(HoaDonBan.tong_thanh_toan), 0)
         ).filter(
             HoaDonBan.trang_thai == "xac_nhan",
@@ -79,12 +83,26 @@ def dashboard(
             *filter_nv
         ).scalar() or 0
 
-    # =========================
-    # CHI PHÍ
-    # =========================
-    def get_chi_phi(filter_nv):
+        # từ phát sinh thu
+        thu_ps = db.query(
+            func.coalesce(func.sum(PhatSinh.so_tien), 0)
+        ).filter(
+            PhatSinh.trang_thai == "xac_nhan",
+            PhatSinh.loai == "thu",
+            PhatSinh.ngay >= start,
+            PhatSinh.ngay < end,
+            *filter_nv
+        ).scalar() or 0
 
-        nhap = db.query(
+        return float(thu_ban + thu_ps)
+
+    # =========================
+    # CHI (BÁM DOCUMENT)
+    # =========================
+    def get_chi(filter_nv):
+
+        # nhập hàng
+        chi_nhap = db.query(
             func.coalesce(func.sum(HoaDonNhap.tong_tien), 0)
         ).filter(
             HoaDonNhap.trang_thai == "xac_nhan",
@@ -93,7 +111,8 @@ def dashboard(
             *filter_nv
         ).scalar() or 0
 
-        phat_sinh = db.query(
+        # phát sinh chi
+        chi_ps = db.query(
             func.coalesce(func.sum(PhatSinh.so_tien), 0)
         ).filter(
             PhatSinh.trang_thai == "xac_nhan",
@@ -103,28 +122,7 @@ def dashboard(
             *filter_nv
         ).scalar() or 0
 
-        return float(nhap + phat_sinh)
-
-    # =========================
-    # DÒNG TIỀN
-    # =========================
-    def get_cashflow(filter_nv):
-
-        thu = db.query(func.coalesce(func.sum(ThuChi.so_tien), 0)).filter(
-            ThuChi.loai == "thu",
-            ThuChi.ngay >= start,
-            ThuChi.ngay < end,
-            *filter_nv
-        ).scalar() or 0
-
-        chi = db.query(func.coalesce(func.sum(ThuChi.so_tien), 0)).filter(
-            ThuChi.loai == "chi",
-            ThuChi.ngay >= start,
-            ThuChi.ngay < end,
-            *filter_nv
-        ).scalar() or 0
-
-        return float(thu), float(chi)
+        return float(chi_nhap + chi_ps)
 
     # =========================
     # ADMIN
@@ -134,10 +132,12 @@ def dashboard(
         ban_theo_loai = get_ban_theo_loai([])
         ban_hom_nay = sum(x["so_luong"] for x in ban_theo_loai)
 
-        doanh_thu = get_doanh_thu([])
-        chi_phi = get_chi_phi([])
+        thu_tien = get_thu([])
+        chi_tien = get_chi([])
 
-        thu_tien, chi_tien = get_cashflow([])
+        # giữ nguyên field FE
+        doanh_thu = thu_tien
+        chi_phi = chi_tien
 
         quy = db.query(QuyCongTyChotNgay).first()
 
@@ -156,8 +156,8 @@ def dashboard(
             "doanh_thu": float(doanh_thu),
             "chi_phi": float(chi_phi),
 
-            "thu_tien": thu_tien,
-            "chi_tien": chi_tien,
+            "thu_tien": float(thu_tien),
+            "chi_tien": float(chi_tien),
 
             "tien_mat": tien_mat,
             "tien_ngan_hang": tien_ngan_hang,
@@ -170,22 +170,21 @@ def dashboard(
     else:
 
         ban_theo_loai = get_ban_theo_loai([
-            NhatKyKho.ma_nv == user.ma_nv
+            HoaDonBan.ma_nv == user.ma_nv
         ])
 
         ban_hom_nay = sum(x["so_luong"] for x in ban_theo_loai)
 
-        doanh_thu = get_doanh_thu([
+        thu_tien = get_thu([
             HoaDonBan.ma_nv == user.ma_nv
         ])
 
-        chi_phi = get_chi_phi([
+        chi_tien = get_chi([
             HoaDonNhap.ma_nv == user.ma_nv
         ])
 
-        thu_tien, chi_tien = get_cashflow([
-            ThuChi.ma_nv == user.ma_nv
-        ])
+        doanh_thu = thu_tien
+        chi_phi = chi_tien
 
         quy = db.query(QuyNhanVienChotNgay).filter(
             QuyNhanVienChotNgay.ma_nv == user.ma_nv
@@ -204,8 +203,8 @@ def dashboard(
             "doanh_thu": float(doanh_thu),
             "chi_phi": float(chi_phi),
 
-            "thu_tien": thu_tien,
-            "chi_tien": chi_tien,
+            "thu_tien": float(thu_tien),
+            "chi_tien": float(chi_tien),
 
             "so_du": so_du
         }
