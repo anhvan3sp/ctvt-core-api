@@ -1,11 +1,15 @@
-
-from app.database import Base
-from sqlalchemy import Column, Integer, String, Date, DateTime, Enum, ForeignKey, DECIMAL, func, BigInteger, Text, CheckConstraint, Index, text
-from datetime import datetime
 import enum
+from datetime import datetime
+
+from sqlalchemy import (
+    Column, Integer, String, Date, DateTime, Enum, ForeignKey,
+    DECIMAL, BigInteger, Text, CheckConstraint, Index
+)
+from app.database import Base
+
 
 # =========================
-# ENUM KHỚP THU_CHI
+# ENUM
 # =========================
 
 class LoaiPhatSinh(str, enum.Enum):
@@ -19,12 +23,8 @@ class TrangThaiPhatSinh(str, enum.Enum):
     HUY = "huy"
 
 
-# ⚠️ KHÔNG dùng Enum cho loai_giao_dich (để khớp DB thu_chi)
-# class LoaiGiaoDich ...
-
-
 # =========================
-# MODEL PHÁT SINH
+# PHÁT SINH
 # =========================
 
 class PhatSinh(Base):
@@ -32,30 +32,14 @@ class PhatSinh(Base):
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
 
-    ma_nv = Column(
-        String(20),
-        ForeignKey("nhan_vien.ma_nv", onupdate="CASCADE", ondelete="RESTRICT"),
-        nullable=False,
-        index=True
-    )
+    ma_nv = Column(String(20), ForeignKey("nhan_vien.ma_nv"), nullable=False, index=True)
 
     ngay = Column(Date, nullable=False, index=True)
 
-    thoi_diem = Column(
-        DateTime,
-        nullable=True,
-        server_default=func.now()
-    )
+    thoi_diem = Column(DateTime, default=datetime.now)
 
-    # 🔥 FIX 1: ENUM → STRING
-    loai = Column(
-        String(10),
-        nullable=False,
-        index=True
-    )
-    
+    loai = Column(String(10), nullable=False, index=True)
 
-    # 🔥 FIX: dùng String để khớp DB thu_chi
     loai_giao_dich = Column(String(50), nullable=True)
 
     so_tien = Column(DECIMAL(18, 2), nullable=False)
@@ -65,41 +49,18 @@ class PhatSinh(Base):
     ref_id = Column(BigInteger, nullable=True)
     ref_type = Column(String(50), nullable=True)
 
-    # =========================
-    # CORE ERP
-    # =========================
-
-    trang_thai = Column(
-        String(20),
-        nullable=False,
-        server_default=text("'nhap'"),
-        index=True
-    )
-   
+    trang_thai = Column(String(20), nullable=False, default="nhap", index=True)
 
     id_thu_chi = Column(BigInteger, nullable=True, index=True)
-
     id_thu_chi_dao = Column(BigInteger, nullable=True, index=True)
 
-    # 🔥 KHÔNG unique (tránh crash)
     idempotency_key = Column(String(100), nullable=True)
 
-    created_at = Column(
-        DateTime,
-        nullable=True,
-        server_default=func.now()
-    )
-
-    updated_at = Column(
-        DateTime,
-        nullable=True,
-        server_default=func.now(),
-        onupdate=func.now()
-    )
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
     __table_args__ = (
         CheckConstraint("so_tien >= 0", name="phat_sinh_chk_1"),
-
         Index("idx_ma_nv", "ma_nv"),
         Index("idx_ngay", "ngay"),
         Index("idx_loai", "loai"),
@@ -120,7 +81,7 @@ class NhanVien(Base):
     vai_tro = Column(Enum("admin","ke_toan","nv_dac_biet","nhan_vien","ke_toan_online"))
     trang_thai = Column(Enum("hoat_dong","ngung"), default="hoat_dong")
     password_hash = Column(String(255))
-    ngay_tao = Column(DateTime, default=datetime.utcnow)
+    ngay_tao = Column(DateTime, default=datetime.now)
 
 
 # ======================
@@ -132,7 +93,7 @@ class KhoHang(Base):
     id = Column(Integer, primary_key=True)
     ma_kho = Column(String(20), unique=True, nullable=False)
     ten_kho = Column(String(255))
-    ngay_tao = Column(DateTime, default=datetime.utcnow)
+    ngay_tao = Column(DateTime, default=datetime.now)
 
 
 # ======================
@@ -160,7 +121,7 @@ class KhachHang(Base):
     so_dien_thoai = Column(String(20))
     ma_so_thue = Column(String(50))
     ghi_chu = Column(String(255))
-    ngay_tao = Column(DateTime, default=datetime.utcnow)
+    ngay_tao = Column(DateTime, default=datetime.now)
 
 
 # ======================
@@ -176,7 +137,7 @@ class NhaCungCap(Base):
     so_dien_thoai = Column(String(20))
     ma_so_thue = Column(String(50))
     email = Column(String(255))
-    ngay_tao = Column(DateTime, default=datetime.utcnow)
+    ngay_tao = Column(DateTime, default=datetime.now)
 
 
 # ======================
@@ -191,7 +152,7 @@ class SanPham(Base):
     loai_san_pham = Column(Enum("gas_binh","gas_kg","gas_mini","khac"))
     don_vi_tinh = Column(Enum("binh","kg","lon","cai"))
     dung_tich_kg = Column(DECIMAL(6,2))
-    ngay_tao = Column(DateTime, default=datetime.utcnow)
+    ngay_tao = Column(DateTime, default=datetime.now)
 
 
 # ======================
@@ -213,7 +174,7 @@ class HoaDonNhap(Base):
     tong_thanh_toan = Column(DECIMAL(18,2))
 
     trang_thai = Column(Enum("nhap","xac_nhan","chot","huy"))
-    ngay_tao = Column(DateTime, default=datetime.utcnow)
+    ngay_tao = Column(DateTime, default=datetime.now)
 
 
 class HoaDonNhapChiTiet(Base):
@@ -252,7 +213,7 @@ class HoaDonBan(Base):
     idempotency_key = Column(String(50), unique=True)
 
     trang_thai = Column(Enum("nhap","xac_nhan","chot","huy"))
-    ngay_tao = Column(DateTime, default=datetime.utcnow)
+    ngay_tao = Column(DateTime, default=datetime.now)
 
 
 class HoaDonBanChiTiet(Base):
@@ -288,11 +249,11 @@ class NhatKyKho(Base):
     bang_tham_chieu = Column(String(50))
     id_tham_chieu = Column(Integer)
 
-    ngay_tao = Column(DateTime, default=datetime.utcnow)
+    ngay_tao = Column(DateTime, default=datetime.now)
 
 
 # ======================
-# THU CHI (FIX KHỚP DB)
+# THU CHI
 # ======================
 class ThuChi(Base):
     __tablename__ = "thu_chi"
@@ -315,7 +276,7 @@ class ThuChi(Base):
     so_du_sau = Column(DECIMAL(18,2))
     so_du_ct_sau = Column(DECIMAL(18,2))
 
-    ngay_tao = Column(DateTime, default=datetime.utcnow)
+    ngay_tao = Column(DateTime, default=datetime.now)
 
     ma_kh = Column(String(50), nullable=True)
     ma_ncc = Column(String(50), nullable=True)
@@ -323,10 +284,9 @@ class ThuChi(Base):
     idempotency_key = Column(String(100))
     created_by = Column(String(50))
 
-    # 🔥 thêm để support reversal chuẩn
     is_reversal = Column(Integer, default=0)
     ref_id = Column(Integer, nullable=True)
-    updated_at = Column(DateTime)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
 
 # ======================
@@ -390,7 +350,7 @@ class CongNoKhachHangLog(Base):
     phat_sinh = Column(DECIMAL(18,2))
     loai = Column(String(50))
     ref_id = Column(Integer)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now)
 
 
 # ======================
@@ -421,4 +381,4 @@ class CongNoNCCLog(Base):
 
     ref_id = Column(Integer)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now)
