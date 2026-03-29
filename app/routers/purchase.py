@@ -204,6 +204,7 @@ def create_purchase(
         # =========================
         hoa_don = HoaDonNhap(
             ngay=datetime.now(),
+            ngay_tao=datetime.now(),
             ma_nv=user.ma_nv,
             ma_ncc=data.ma_ncc,
             ma_kho=data.ma_kho,
