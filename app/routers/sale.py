@@ -246,3 +246,34 @@ def cancel_sale(
     except Exception as e:
         db.rollback()
         raise HTTPException(500, str(e))
+
+
+
+# =========================
+# GET TODAY (SALE + NHAP + THU_CHI)
+# =========================
+@router.get("/today")
+def get_today_sale(
+    db: Session = Depends(get_db),
+    user=Depends(require_roles(["admin", "nhan_vien"]))
+):
+    today = now_vn().date()
+
+    sales = db.query(HoaDonBan)\
+        .filter(
+            HoaDonBan.ngay == today,
+            HoaDonBan.ma_nv == user.ma_nv
+        )\
+        .order_by(HoaDonBan.id.desc())\
+        .all()
+
+    result = []
+
+    for s in sales:
+        result.append({
+            "id": s.id,
+            "tong_tien": float(s.tong_thanh_toan or 0),
+            "trang_thai": s.trang_thai
+        })
+
+    return result
