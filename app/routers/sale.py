@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select
 from decimal import Decimal
 from datetime import datetime, timedelta
-
+from app.models import KhachHang, SanPham
 from app.database import get_db
 from app.schemas import HoaDonBanCreate
 from app.auth_utils import require_roles
