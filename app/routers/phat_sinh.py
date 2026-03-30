@@ -40,7 +40,7 @@ def create_phat_sinh(
     now = now_vn()
 
     # =========================
-    # 🔥 CHECK TRÙNG (KHÔNG CHẶN)
+    # CHECK TRÙNG (CHỈ WARNING)
     # =========================
     existing = db.query(PhatSinh).filter(
         PhatSinh.ma_nv == user.ma_nv,
@@ -63,15 +63,15 @@ def create_phat_sinh(
     # =========================
     ps = PhatSinh(
         ma_nv=user.ma_nv,
-        ngay=now.date(),            # 🔥 FIX
-        thoi_diem=now,              # 🔥 FIX
+        ngay=now.date(),
+        thoi_diem=now,
         loai=data.loai,
         loai_giao_dich=data.loai_giao_dich,
         so_tien=data.so_tien,
         dien_giai=data.dien_giai,
         trang_thai=TrangThaiPhatSinh.NHAP,
-        created_at=now,             # 🔥 FIX
-        updated_at=now              # 🔥 FIX
+        created_at=now,
+        updated_at=now
     )
 
     db.add(ps)
@@ -82,7 +82,7 @@ def create_phat_sinh(
 
 
 # =========================
-# CONFIRM (🔥 QUAN TRỌNG)
+# CONFIRM (🔥 FIX: KHÔNG CHECK TRÙNG)
 # =========================
 @router.post("/confirm")
 def confirm_phat_sinh(
@@ -93,7 +93,6 @@ def confirm_phat_sinh(
     try:
         now = now_vn()
 
-        # ===== LOCK =====
         ps = db.execute(
             select(PhatSinh)
             .where(PhatSinh.id == data.id)
@@ -110,10 +109,12 @@ def confirm_phat_sinh(
         if ps.trang_thai != TrangThaiPhatSinh.NHAP:
             raise HTTPException(400, "Đã xác nhận hoặc huỷ")
 
-        # ===== IDEMPOTENCY =====
+        # =========================
+        # ❌ KHÔNG CÒN CHECK TRÙNG Ở ĐÂY
+        # =========================
+
         idem_key = f"ps_confirm_{ps.id}"
 
-        # ===== CALL THU_CHI =====
         tc_data = ThuChiCreate(
             loai=ps.loai,
             loai_giao_dich=ps.loai_giao_dich,
@@ -125,10 +126,9 @@ def confirm_phat_sinh(
 
         result = create_thu_chi(tc_data, db, user)
 
-        # ===== UPDATE =====
         ps.trang_thai = TrangThaiPhatSinh.XAC_NHAN
         ps.idempotency_key = idem_key
-        ps.updated_at = now   # 🔥 FIX
+        ps.updated_at = now
 
         db.commit()
 
@@ -173,7 +173,6 @@ def cancel_phat_sinh(
         if ps.trang_thai != TrangThaiPhatSinh.XAC_NHAN:
             raise HTTPException(400, "Chỉ huỷ khi đã xác nhận")
 
-        # ===== ĐẢO LOẠI =====
         loai_dao = "thu" if ps.loai == "chi" else "chi"
 
         idem_key = f"ps_cancel_{ps.id}"
@@ -190,7 +189,7 @@ def cancel_phat_sinh(
         result = create_thu_chi(tc_data, db, user)
 
         ps.trang_thai = TrangThaiPhatSinh.HUY
-        ps.updated_at = now   # 🔥 FIX
+        ps.updated_at = now
 
         db.commit()
 
@@ -209,6 +208,41 @@ def cancel_phat_sinh(
 
 
 # =========================
+# DELETE (🔥 FIX 404)
+# =========================
+@router.post("/delete")
+def delete_phat_sinh(
+    data: PhatSinhConfirm,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user)
+):
+    try:
+        ps = db.query(PhatSinh).filter(
+            PhatSinh.id == data.id,
+            PhatSinh.ma_nv == user.ma_nv
+        ).first()
+
+        if not ps:
+            raise HTTPException(404, "Không tìm thấy")
+
+        if ps.trang_thai != TrangThaiPhatSinh.NHAP:
+            raise HTTPException(400, "Chỉ được xoá nháp")
+
+        db.delete(ps)
+        db.commit()
+
+    except HTTPException as e:
+        db.rollback()
+        raise e
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(500, str(e))
+
+    return {"msg": "DELETED"}
+
+
+# =========================
 # LIST TODAY
 # =========================
 @router.get("/today")
@@ -216,7 +250,7 @@ def get_today(
     db: Session = Depends(get_db),
     user=Depends(get_current_user)
 ):
-    today = now_vn().date()   # 🔥 FIX (KHÔNG dùng date.today)
+    today = now_vn().date()
 
     result = db.query(PhatSinh).filter(
         PhatSinh.ma_nv == user.ma_nv,
