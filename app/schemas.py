@@ -261,7 +261,7 @@ class PhatSinhCreate(BaseModel):
     loai_giao_dich: str
     so_tien: float
     dien_giai: Optional[str] = None
-
+    force: bool = False  
     @field_validator("so_tien")
     @classmethod
     def validate_so_tien(cls, v):
