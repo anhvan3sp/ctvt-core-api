@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from decimal import Decimal
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from app.database import get_db
 from app.schemas import HoaDonBanCreate
@@ -12,10 +12,9 @@ from app.models import (
     HoaDonBanChiTiet,
     TonKhoChotNgay,
     NhatKyKho,
-    QuyNhanVienChotNgay,
     QuyCongTyChotNgay,
+    QuyNhanVienChotNgay,
     ThuChi,
-    KhachHang,
     CongNoKhachHang,
     CongNoKhachHangLog
 )
@@ -23,80 +22,42 @@ from app.models import (
 router = APIRouter(prefix="/sale", tags=["Sale"])
 
 
+def now_vn():
+    return datetime.utcnow() + timedelta(hours=7)
+
+
 def to_decimal(val):
-    try:
-        return Decimal(str(val or 0))
-    except:
-        raise HTTPException(400, "Tiền không hợp lệ")
+    return Decimal(str(val or 0))
 
 
 @router.post("/")
 def create_sale(
     data: HoaDonBanCreate,
     db: Session = Depends(get_db),
-    user=Depends(require_roles(["admin", "nv_dac_biet"]))
+    user=Depends(require_roles(["admin", "nhan_vien"]))
 ):
     try:
+        now = now_vn()
 
-        # =========================
-        # IDEMPOTENCY
-        # =========================
-        if getattr(data, "idempotency_key", None):
-            existed = db.execute(text("""
-                SELECT id FROM hoa_don_ban
-                WHERE idempotency_key = :key
-                LIMIT 1
-            """), {"key": data.idempotency_key}).fetchone()
+        if not data.items:
+            raise HTTPException(400, "Không có sản phẩm")
 
-            if existed:
-                return {"message": "OK (duplicate ignored)"}
-
-        # =========================
-        # CHECK QUYỀN KHO
-        # =========================
-        if user.vai_tro != "admin":
-            row = db.execute(text("""
-                SELECT 1 FROM nhan_vien_kho
-                WHERE ma_nv = :ma_nv AND ma_kho = :ma_kho
-            """), {
-                "ma_nv": user.ma_nv,
-                "ma_kho": data.ma_kho
-            }).fetchone()
-
-            if not row:
-                raise HTTPException(403, "Không được phép dùng kho")
-
-        # =========================
-        # LOCK QUỸ + KHÁCH
-        # =========================
-        quy_nv = db.query(QuyNhanVienChotNgay)\
-            .filter_by(ma_nv=user.ma_nv)\
-            .with_for_update()\
-            .first()
-
-        quy_ct = db.query(QuyCongTyChotNgay)\
-            .with_for_update()\
-            .first()
-
-        kh = db.query(KhachHang)\
-            .filter_by(ma_kh=data.ma_kh)\
-            .with_for_update()\
-            .first()
-
-        if not quy_nv or not quy_ct:
-            raise HTTPException(400, "Thiếu quỹ")
-
-        if not kh:
-            raise HTTPException(400, "Không có khách")
-
-        # =========================
-        # TÍNH TIỀN + KHO
-        # =========================
         tong_tien = Decimal("0")
 
         for item in data.items:
-            sl = Decimal(str(item.so_luong))
-            gia = Decimal(str(item.don_gia))
+            sl = to_decimal(item.so_luong)
+            gia = to_decimal(item.don_gia)
+
+            if sl <= 0:
+                raise HTTPException(400, "Số lượng phải > 0")
+
+            tong_tien += sl * gia
+
+        # =========================
+        # TRỪ KHO
+        # =========================
+        for item in data.items:
+            sl = to_decimal(item.so_luong)
 
             ton = db.query(TonKhoChotNgay)\
                 .filter_by(ma_kho=data.ma_kho, ma_sp=item.ma_sp)\
@@ -114,37 +75,22 @@ def create_sale(
                 loai="xuat",
                 so_luong=sl,
                 ma_nv=user.ma_nv,
-                ngay=datetime.now()
+                ngay=now
             ))
 
-            tong_tien += sl * gia
-
-        # =========================
-        # CHECK TRÙNG (FIX CHUẨN)
-        # =========================
-        existing = db.execute(text("""
-            SELECT id FROM hoa_don_ban
-            WHERE DATE(ngay) = :ngay
-              AND ma_nv = :ma_nv
-              AND ma_kh = :ma_kh
-              AND tong_tien = :tong_tien
-            LIMIT 1
-        """), {
-            "ngay": data.ngay,   # 🔥 FIX
-            "ma_nv": user.ma_nv,
-            "ma_kh": data.ma_kh,
-            "tong_tien": tong_tien
-        }).fetchone()
-
-        if existing and not data.force:   # 🔥 FIX
-            raise HTTPException(409, "HOA_DON_TRUNG")
-
-        # =========================
-        # TIỀN
-        # =========================
         tien_mat = to_decimal(data.tien_mat)
         tien_ck = to_decimal(data.tien_ck)
+
         tong_thanh_toan = tien_mat + tien_ck
+        no_lai = tong_tien - tong_thanh_toan
+
+        # =========================
+        # QUỸ
+        # =========================
+        quy_ct = db.query(QuyCongTyChotNgay).with_for_update().first()
+        quy_nv = db.query(QuyNhanVienChotNgay)\
+            .filter_by(ma_nv=user.ma_nv)\
+            .with_for_update().first()
 
         if tien_mat > 0:
             quy_nv.so_du += tien_mat
@@ -153,90 +99,66 @@ def create_sale(
             quy_ct.tien_ngan_hang += tien_ck
 
         # =========================
-        # CÔNG NỢ
+        # CÔNG NỢ KH
         # =========================
-        no_moi = tong_tien - tong_thanh_toan
-
         cn = db.query(CongNoKhachHang)\
             .filter_by(ma_kh=data.ma_kh)\
-            .with_for_update()\
-            .first()
+            .with_for_update().first()
 
         if not cn:
             cn = CongNoKhachHang(ma_kh=data.ma_kh, so_du=Decimal("0"))
             db.add(cn)
             db.flush()
 
-        cn.so_du += no_moi
+        cn.so_du += no_lai
 
         db.add(CongNoKhachHangLog(
             ma_kh=data.ma_kh,
-            ngay=datetime.now(),
-            phat_sinh=no_moi,
+            ngay=now,
+            phat_sinh=no_lai,
             loai="ban_hang"
         ))
-
-        # =========================
-        # THU CHI
-        # =========================
-        if tien_mat > 0:
-            db.add(ThuChi(
-                ngay=datetime.now(),
-                doi_tuong="nhan_vien",
-                ma_nv=user.ma_nv,
-                so_tien=tien_mat,
-                loai="thu",
-                hinh_thuc="tien_mat",
-                loai_giao_dich="ban_hang"
-            ))
-
-        if tien_ck > 0:
-            db.add(ThuChi(
-                ngay=datetime.now(),
-                doi_tuong="cong_ty",
-                ma_nv=user.ma_nv,
-                so_tien=tien_ck,
-                loai="thu",
-                hinh_thuc="chuyen_khoan",
-                loai_giao_dich="ban_hang"
-            ))
 
         # =========================
         # HÓA ĐƠN
         # =========================
         hoa_don = HoaDonBan(
-            ngay=datetime.now(),
-            ma_nv=user.ma_nv,
+            ngay=now.date(),
+            ngay_tao=now,
             ma_kh=data.ma_kh,
+            ma_nv=user.ma_nv,
             ma_kho=data.ma_kho,
             tong_tien=tong_tien,
             tien_mat=tien_mat,
             tien_ck=tien_ck,
             tong_thanh_toan=tong_thanh_toan,
-            no_lai=no_moi,
-            idempotency_key=getattr(data, "idempotency_key", None),
+            no_lai=no_lai,
             trang_thai="xac_nhan"
         )
 
         db.add(hoa_don)
         db.flush()
 
+        # =========================
+        # CHI TIẾT
+        # =========================
+        chi_tiet = []
         for item in data.items:
-            db.add(HoaDonBanChiTiet(
+            sl = to_decimal(item.so_luong)
+            gia = to_decimal(item.don_gia)
+
+            chi_tiet.append(HoaDonBanChiTiet(
                 id_hoa_don=hoa_don.id,
                 ma_sp=item.ma_sp,
-                so_luong=item.so_luong,
-                don_gia=item.don_gia,
-                thanh_tien=item.so_luong * item.don_gia
+                so_luong=sl,
+                don_gia=gia,
+                thanh_tien=sl * gia
             ))
 
+        db.add_all(chi_tiet)
+
         db.commit()
-
         return {"message": "OK"}
-
-    except HTTPException as e:
-        db.rollback()
-        raise e
 
     except Exception as e:
         db.rollback()
