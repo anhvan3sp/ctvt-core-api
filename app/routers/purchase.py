@@ -4,6 +4,7 @@ from sqlalchemy import text
 from decimal import Decimal
 from datetime import datetime
 
+
 from app.database import get_db
 from app.schemas import HoaDonNhapCreate
 from app.auth_utils import require_roles
@@ -35,6 +36,7 @@ def create_purchase(
     db: Session = Depends(get_db),
     user=Depends(require_roles(["admin", "nv_dac_biet"]))
 ):
+   
     try:
 
         # =========================
@@ -202,6 +204,7 @@ def create_purchase(
         # =========================
         # HÓA ĐƠN
         # =========================
+        now = datetime.now()   # 🔥 THÊM DÒNG NÀY
         hoa_don = HoaDonNhap(
             ngay=now.date(),          # 🔥 đúng kiểu Date
             ngay_tao=now,             # 🔥 ép thẳng
