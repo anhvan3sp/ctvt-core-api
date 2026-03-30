@@ -250,8 +250,9 @@ def cancel_sale(
 
 
 # =========================
-# GET TODAY (SALE + NHAP + THU_CHI)
+# GET TODAY (SALE )
 # =========================
+
 @router.get("/today")
 def get_today_sale(
     db: Session = Depends(get_db),
@@ -259,21 +260,44 @@ def get_today_sale(
 ):
     today = now_vn().date()
 
-    sales = db.query(HoaDonBan)\
+    sales = (
+        db.query(HoaDonBan, KhachHang.ten_cua_hang)
+        .outerjoin(KhachHang, HoaDonBan.ma_kh == KhachHang.ma_kh)
         .filter(
             HoaDonBan.ngay == today,
             HoaDonBan.ma_nv == user.ma_nv
-        )\
-        .order_by(HoaDonBan.id.desc())\
+        )
+        .order_by(HoaDonBan.id.desc())
         .all()
+    )
 
     result = []
 
-    for s in sales:
+    for s, ten_kh in sales:
+
+        chi_tiet = (
+            db.query(HoaDonBanChiTiet, SanPham.ten_sp)
+            .join(SanPham, HoaDonBanChiTiet.ma_sp == SanPham.ma_sp)
+            .filter(HoaDonBanChiTiet.id_hoa_don == s.id)
+            .all()
+        )
+
+        items = []
+
+        for ct, ten_sp in chi_tiet:
+            items.append({
+                "ten_sp": ten_sp,
+                "so_luong": float(ct.so_luong),
+                "don_gia": float(ct.don_gia),
+                "thanh_tien": float(ct.thanh_tien)
+            })
+
         result.append({
             "id": s.id,
+            "ten_kh": ten_kh or "",
             "tong_tien": float(s.tong_thanh_toan or 0),
-            "trang_thai": s.trang_thai
+            "trang_thai": s.trang_thai,
+            "items": items
         })
 
     return result
