@@ -38,7 +38,7 @@ def create_purchase(
     try:
         # 🔥 DÙNG DUY NHẤT 1 TIME
         now = datetime.now()
-
+        print("DEBUG TIME:", now)
         # =========================
         # VALIDATE
         # =========================
