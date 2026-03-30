@@ -15,22 +15,15 @@ from app.schemas import (
 )
 from app.auth_utils import get_current_user
 
-# 🔥 gọi lại API thu_chi
 from app.routers.thu_chi_nv import create_thu_chi
 
 router = APIRouter(prefix="/phat-sinh", tags=["phat_sinh"])
 
 
-# =========================
-# 🔥 TIME VN (CHUẨN TOÀN HỆ)
-# =========================
 def now_vn():
     return datetime.utcnow() + timedelta(hours=7)
 
 
-# =========================
-# CREATE (NHÁP) + WARNING TRÙNG
-# =========================
 @router.post("/create")
 def create_phat_sinh(
     data: PhatSinhCreate,
@@ -39,9 +32,6 @@ def create_phat_sinh(
 ):
     now = now_vn()
 
-    # =========================
-    # CHECK TRÙNG (CHỈ WARNING)
-    # =========================
     existing = db.query(PhatSinh).filter(
         PhatSinh.ma_nv == user.ma_nv,
         PhatSinh.loai == data.loai,
@@ -58,9 +48,6 @@ def create_phat_sinh(
             "existing_id": existing.id
         }
 
-    # =========================
-    # CREATE
-    # =========================
     ps = PhatSinh(
         ma_nv=user.ma_nv,
         ngay=now.date(),
@@ -81,9 +68,6 @@ def create_phat_sinh(
     return ps
 
 
-# =========================
-# CONFIRM (🔥 FIX: KHÔNG CHECK TRÙNG)
-# =========================
 @router.post("/confirm")
 def confirm_phat_sinh(
     data: PhatSinhConfirm,
@@ -102,16 +86,11 @@ def confirm_phat_sinh(
         if not ps:
             raise HTTPException(404, "Không tìm thấy")
 
-        # idempotent
         if ps.trang_thai == TrangThaiPhatSinh.XAC_NHAN:
             return {"msg": "ALREADY_CONFIRMED"}
 
         if ps.trang_thai != TrangThaiPhatSinh.NHAP:
             raise HTTPException(400, "Đã xác nhận hoặc huỷ")
-
-        # =========================
-        # ❌ KHÔNG CÒN CHECK TRÙNG Ở ĐÂY
-        # =========================
 
         idem_key = f"ps_confirm_{ps.id}"
 
@@ -124,7 +103,18 @@ def confirm_phat_sinh(
             idempotency_key=idem_key
         )
 
-        result = create_thu_chi(tc_data, db, user)
+        # =========================
+        # 🔥 FIX QUAN TRỌNG Ở ĐÂY
+        # =========================
+        try:
+            result = create_thu_chi(tc_data, db, user)
+
+        except HTTPException as e:
+            # 👉 nếu ledger báo trùng → coi như success
+            if e.status_code == 409:
+                result = {"msg": "IDEMPOTENT_OK"}
+            else:
+                raise e
 
         ps.trang_thai = TrangThaiPhatSinh.XAC_NHAN
         ps.idempotency_key = idem_key
@@ -146,9 +136,6 @@ def confirm_phat_sinh(
     }
 
 
-# =========================
-# CANCEL (REVERSAL)
-# =========================
 @router.post("/cancel")
 def cancel_phat_sinh(
     data: PhatSinhCancel,
@@ -186,7 +173,13 @@ def cancel_phat_sinh(
             idempotency_key=idem_key
         )
 
-        result = create_thu_chi(tc_data, db, user)
+        try:
+            result = create_thu_chi(tc_data, db, user)
+        except HTTPException as e:
+            if e.status_code == 409:
+                result = {"msg": "IDEMPOTENT_OK"}
+            else:
+                raise e
 
         ps.trang_thai = TrangThaiPhatSinh.HUY
         ps.updated_at = now
@@ -207,44 +200,29 @@ def cancel_phat_sinh(
     }
 
 
-# =========================
-# DELETE (🔥 FIX 404)
-# =========================
 @router.post("/delete")
 def delete_phat_sinh(
     data: PhatSinhConfirm,
     db: Session = Depends(get_db),
     user=Depends(get_current_user)
 ):
-    try:
-        ps = db.query(PhatSinh).filter(
-            PhatSinh.id == data.id,
-            PhatSinh.ma_nv == user.ma_nv
-        ).first()
+    ps = db.query(PhatSinh).filter(
+        PhatSinh.id == data.id,
+        PhatSinh.ma_nv == user.ma_nv
+    ).first()
 
-        if not ps:
-            raise HTTPException(404, "Không tìm thấy")
+    if not ps:
+        raise HTTPException(404, "Không tìm thấy")
 
-        if ps.trang_thai != TrangThaiPhatSinh.NHAP:
-            raise HTTPException(400, "Chỉ được xoá nháp")
+    if ps.trang_thai != TrangThaiPhatSinh.NHAP:
+        raise HTTPException(400, "Chỉ được xoá nháp")
 
-        db.delete(ps)
-        db.commit()
-
-    except HTTPException as e:
-        db.rollback()
-        raise e
-
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(500, str(e))
+    db.delete(ps)
+    db.commit()
 
     return {"msg": "DELETED"}
 
 
-# =========================
-# LIST TODAY
-# =========================
 @router.get("/today")
 def get_today(
     db: Session = Depends(get_db),
