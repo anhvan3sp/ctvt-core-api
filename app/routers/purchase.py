@@ -38,7 +38,7 @@ def create_purchase(
     try:
         # 🔥 FIX TIMEZONE: chuyển UTC → VN (+7)
         now = datetime.utcnow() + timedelta(hours=7)
-        print("DEBUG TIME:", now)
+     
 
         # =========================
         # VALIDATE
