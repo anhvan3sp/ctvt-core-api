@@ -29,7 +29,7 @@ def now_vn():
 
 
 # =========================
-# CREATE (NHÁP)
+# CREATE (NHÁP) + WARNING TRÙNG
 # =========================
 @router.post("/create")
 def create_phat_sinh(
@@ -39,6 +39,28 @@ def create_phat_sinh(
 ):
     now = now_vn()
 
+    # =========================
+    # 🔥 CHECK TRÙNG (KHÔNG CHẶN)
+    # =========================
+    existing = db.query(PhatSinh).filter(
+        PhatSinh.ma_nv == user.ma_nv,
+        PhatSinh.loai == data.loai,
+        PhatSinh.loai_giao_dich == data.loai_giao_dich,
+        PhatSinh.so_tien == data.so_tien,
+        PhatSinh.ngay == now.date(),
+        PhatSinh.trang_thai != TrangThaiPhatSinh.HUY
+    ).order_by(PhatSinh.thoi_diem.desc()).first()
+
+    if existing and not getattr(data, "force", False):
+        return {
+            "warning": True,
+            "message": f"Giao dịch giống đã tồn tại lúc {existing.thoi_diem.strftime('%H:%M:%S')}",
+            "existing_id": existing.id
+        }
+
+    # =========================
+    # CREATE
+    # =========================
     ps = PhatSinh(
         ma_nv=user.ma_nv,
         ngay=now.date(),            # 🔥 FIX
