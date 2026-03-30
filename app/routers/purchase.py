@@ -4,7 +4,6 @@ from sqlalchemy import text
 from decimal import Decimal
 from datetime import datetime
 
-
 from app.database import get_db
 from app.schemas import HoaDonNhapCreate
 from app.auth_utils import require_roles
@@ -36,8 +35,9 @@ def create_purchase(
     db: Session = Depends(get_db),
     user=Depends(require_roles(["admin", "nv_dac_biet"]))
 ):
-   
     try:
+        # 🔥 DÙNG DUY NHẤT 1 TIME
+        now = datetime.now()
 
         # =========================
         # VALIDATE
@@ -70,7 +70,7 @@ def create_purchase(
               AND tong_tien = :tong_tien
             LIMIT 1
         """), {
-            "ngay": datetime.now().date(),
+            "ngay": now.date(),
             "ma_nv": user.ma_nv,
             "ma_ncc": data.ma_ncc,
             "tong_tien": tong_tien
@@ -87,7 +87,6 @@ def create_purchase(
         if not quy_ct:
             raise HTTPException(400, "Thiếu quỹ công ty")
 
-        # chỉ lock quỹ NV nếu KHÔNG phải admin
         quy_nv = None
         if user.vai_tro != "admin":
             quy_nv = db.query(QuyNhanVienChotNgay)\
@@ -126,11 +125,11 @@ def create_purchase(
                 loai="nhap",
                 so_luong=sl,
                 ma_nv=user.ma_nv,
-                ngay=datetime.now()
+                ngay=now
             ))
 
         # =========================
-        # TIỀN (🔥 FIX THEO ROLE)
+        # TIỀN
         # =========================
         tien_mat = to_decimal(data.tien_mat)
         tien_ck = to_decimal(data.tien_ck)
@@ -139,18 +138,13 @@ def create_purchase(
         no_moi = tong_tien - tong_thanh_toan
 
         if user.vai_tro == "admin":
-            # 🔥 ADMIN → TẤT CẢ TRỪ QUỸ CÔNG TY
             if tien_mat > 0:
                 quy_ct.tien_mat -= tien_mat
-
             if tien_ck > 0:
                 quy_ct.tien_ngan_hang -= tien_ck
-
         else:
-            # 🔥 NHÂN VIÊN
             if tien_mat > 0:
                 quy_nv.so_du -= tien_mat
-
             if tien_ck > 0:
                 quy_ct.tien_ngan_hang -= tien_ck
 
@@ -171,17 +165,17 @@ def create_purchase(
 
         db.add(CongNoNCCLog(
             ma_ncc=data.ma_ncc,
-            ngay=datetime.now(),
+            ngay=now,
             phat_sinh=no_moi,
             loai="nhap_hang"
         ))
 
         # =========================
-        # THU CHI (🔥 FIX ROLE)
+        # THU CHI
         # =========================
         if tien_mat > 0:
             db.add(ThuChi(
-                ngay=datetime.now(),
+                ngay=now,
                 doi_tuong="cong_ty" if user.vai_tro == "admin" else "nhan_vien",
                 ma_nv=user.ma_nv,
                 so_tien=tien_mat,
@@ -192,7 +186,7 @@ def create_purchase(
 
         if tien_ck > 0:
             db.add(ThuChi(
-                ngay=datetime.now(),
+                ngay=now,
                 doi_tuong="cong_ty",
                 ma_nv=user.ma_nv,
                 so_tien=tien_ck,
@@ -202,12 +196,11 @@ def create_purchase(
             ))
 
         # =========================
-        # HÓA ĐƠN
+        # HÓA ĐƠN (🔥 FIX CHÍNH)
         # =========================
-        now = datetime.now()   # 🔥 THÊM DÒNG NÀY
         hoa_don = HoaDonNhap(
-            ngay=now.date(),          # 🔥 đúng kiểu Date
-            ngay_tao=now,             # 🔥 ép thẳng
+            ngay=now.date(),
+            ngay_tao=now,   # 🔥 CHỐT LỖI TIME Ở ĐÂY
             ma_nv=user.ma_nv,
             ma_ncc=data.ma_ncc,
             ma_kho=data.ma_kho,
