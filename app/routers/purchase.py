@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from decimal import Decimal
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from app.database import get_db
 from app.schemas import HoaDonNhapCreate
@@ -36,9 +36,10 @@ def create_purchase(
     user=Depends(require_roles(["admin", "nv_dac_biet"]))
 ):
     try:
-        # 🔥 DÙNG DUY NHẤT 1 TIME
-        now = datetime.now()
+        # 🔥 FIX TIMEZONE: chuyển UTC → VN (+7)
+        now = datetime.utcnow() + timedelta(hours=7)
         print("DEBUG TIME:", now)
+
         # =========================
         # VALIDATE
         # =========================
@@ -196,11 +197,11 @@ def create_purchase(
             ))
 
         # =========================
-        # HÓA ĐƠN (🔥 FIX CHÍNH)
+        # HÓA ĐƠN
         # =========================
         hoa_don = HoaDonNhap(
             ngay=now.date(),
-            ngay_tao=now,   # 🔥 CHỐT LỖI TIME Ở ĐÂY
+            ngay_tao=now,
             ma_nv=user.ma_nv,
             ma_ncc=data.ma_ncc,
             ma_kho=data.ma_kho,
