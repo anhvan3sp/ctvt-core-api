@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 import uuid
 
 from app.database import get_db
@@ -22,6 +22,13 @@ router = APIRouter(prefix="/phat-sinh", tags=["phat_sinh"])
 
 
 # =========================
+# 🔥 TIME VN (CHUẨN TOÀN HỆ)
+# =========================
+def now_vn():
+    return datetime.utcnow() + timedelta(hours=7)
+
+
+# =========================
 # CREATE (NHÁP)
 # =========================
 @router.post("/create")
@@ -30,14 +37,19 @@ def create_phat_sinh(
     db: Session = Depends(get_db),
     user=Depends(get_current_user)
 ):
+    now = now_vn()
+
     ps = PhatSinh(
         ma_nv=user.ma_nv,
-        ngay=data.ngay,
+        ngay=now.date(),            # 🔥 FIX
+        thoi_diem=now,              # 🔥 FIX
         loai=data.loai,
         loai_giao_dich=data.loai_giao_dich,
         so_tien=data.so_tien,
         dien_giai=data.dien_giai,
-        trang_thai=TrangThaiPhatSinh.NHAP
+        trang_thai=TrangThaiPhatSinh.NHAP,
+        created_at=now,             # 🔥 FIX
+        updated_at=now              # 🔥 FIX
     )
 
     db.add(ps)
@@ -57,6 +69,8 @@ def confirm_phat_sinh(
     user=Depends(get_current_user)
 ):
     try:
+        now = now_vn()
+
         # ===== LOCK =====
         ps = db.execute(
             select(PhatSinh)
@@ -67,11 +81,9 @@ def confirm_phat_sinh(
         if not ps:
             raise HTTPException(404, "Không tìm thấy")
 
-        # idempotent (double click / multi device)
+        # idempotent
         if ps.trang_thai == TrangThaiPhatSinh.XAC_NHAN:
-            return {
-                "msg": "ALREADY_CONFIRMED"
-            }
+            return {"msg": "ALREADY_CONFIRMED"}
 
         if ps.trang_thai != TrangThaiPhatSinh.NHAP:
             raise HTTPException(400, "Đã xác nhận hoặc huỷ")
@@ -94,6 +106,7 @@ def confirm_phat_sinh(
         # ===== UPDATE =====
         ps.trang_thai = TrangThaiPhatSinh.XAC_NHAN
         ps.idempotency_key = idem_key
+        ps.updated_at = now   # 🔥 FIX
 
         db.commit()
 
@@ -121,6 +134,8 @@ def cancel_phat_sinh(
     user=Depends(get_current_user)
 ):
     try:
+        now = now_vn()
+
         ps = db.execute(
             select(PhatSinh)
             .where(PhatSinh.id == data.id)
@@ -131,9 +146,7 @@ def cancel_phat_sinh(
             raise HTTPException(404, "Không tìm thấy")
 
         if ps.trang_thai == TrangThaiPhatSinh.HUY:
-            return {
-                "msg": "ALREADY_CANCELED"
-            }
+            return {"msg": "ALREADY_CANCELED"}
 
         if ps.trang_thai != TrangThaiPhatSinh.XAC_NHAN:
             raise HTTPException(400, "Chỉ huỷ khi đã xác nhận")
@@ -155,6 +168,7 @@ def cancel_phat_sinh(
         result = create_thu_chi(tc_data, db, user)
 
         ps.trang_thai = TrangThaiPhatSinh.HUY
+        ps.updated_at = now   # 🔥 FIX
 
         db.commit()
 
@@ -180,7 +194,7 @@ def get_today(
     db: Session = Depends(get_db),
     user=Depends(get_current_user)
 ):
-    today = date.today()
+    today = now_vn().date()   # 🔥 FIX (KHÔNG dùng date.today)
 
     result = db.query(PhatSinh).filter(
         PhatSinh.ma_nv == user.ma_nv,
