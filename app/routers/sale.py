@@ -39,7 +39,7 @@ def to_decimal(val):
 def create_sale(
     data: HoaDonBanCreate,
     db: Session = Depends(get_db),
-    user=Depends(require_roles(["admin", "nhan_vien"]))
+    user=Depends(require_roles(["admin", "nhan_vien,nv_dac_biet"]))
 ):
     try:
         now = now_vn()
