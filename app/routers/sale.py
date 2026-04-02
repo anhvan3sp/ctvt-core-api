@@ -21,9 +21,6 @@ from app.models import (
 router = APIRouter(prefix="/sale", tags=["Sale"])
 
 
-# =========================
-# TIME VN
-# =========================
 def now_vn():
     return datetime.utcnow() + timedelta(hours=7)
 
@@ -32,9 +29,6 @@ def to_decimal(val):
     return Decimal(str(val or 0))
 
 
-# =========================
-# CREATE (NHÁP)
-# =========================
 @router.post("/")
 def create_sale(
     data: HoaDonBanCreate,
@@ -46,7 +40,6 @@ def create_sale(
 
         tong_tien = Decimal("0")
 
-        # 🔥 CHO PHÉP KHÔNG CÓ ITEM
         if data.items:
             for item in data.items:
                 sl = to_decimal(item.so_luong)
@@ -62,13 +55,9 @@ def create_sale(
         tong_thanh_toan = tien_mat + tien_ck
         no_lai = tong_tien - tong_thanh_toan
 
-        # 🔥 CHẶN TRƯỜNG HỢP RỖNG
         if tong_tien == 0 and tong_thanh_toan <= 0:
             raise HTTPException(400, "Không có dữ liệu")
 
-        # =========================
-        # TẠO NHÁP
-        # =========================
         hoa_don = HoaDonBan(
             ngay=now.date(),
             ngay_tao=now,
@@ -86,9 +75,6 @@ def create_sale(
         db.add(hoa_don)
         db.flush()
 
-        # =========================
-        # CHI TIẾT (CÓ THÌ MỚI ADD)
-        # =========================
         chi_tiet = []
         if data.items:
             for item in data.items:
@@ -114,9 +100,6 @@ def create_sale(
         raise HTTPException(500, str(e))
 
 
-# =========================
-# CONFIRM
-# =========================
 @router.post("/confirm")
 def confirm_sale(
     id: int,
@@ -144,9 +127,6 @@ def confirm_sale(
         chi_tiets = db.query(HoaDonBanChiTiet)\
             .filter_by(id_hoa_don=id).all()
 
-        # =========================
-        # 🔥 CHỈ TRỪ KHO KHI CÓ SP
-        # =========================
         if chi_tiets:
             for item in chi_tiets:
                 ton = db.query(TonKhoChotNgay)\
@@ -169,7 +149,7 @@ def confirm_sale(
                 ))
 
         # =========================
-        # QUỸ
+        # 🔥 FIX QUỸ THEO ROLE
         # =========================
         quy_ct = db.query(QuyCongTyChotNgay).with_for_update().first()
         quy_nv = db.query(QuyNhanVienChotNgay)\
@@ -177,13 +157,16 @@ def confirm_sale(
             .with_for_update().first()
 
         if hoa_don.tien_mat > 0:
-            quy_nv.so_du += hoa_don.tien_mat
+            if user.vai_tro == "admin":
+                quy_ct.tien_mat += hoa_don.tien_mat
+            else:
+                quy_nv.so_du += hoa_don.tien_mat
 
         if hoa_don.tien_ck > 0:
             quy_ct.tien_ngan_hang += hoa_don.tien_ck
 
         # =========================
-        # 🔥 CÔNG NỢ (FIX QUAN TRỌNG)
+        # CÔNG NỢ
         # =========================
         cn = db.query(CongNoKhachHang)\
             .filter_by(ma_kh=hoa_don.ma_kh)\
@@ -195,15 +178,11 @@ def confirm_sale(
             db.flush()
 
         if chi_tiets:
-            # 👉 bán hàng
             cn.so_du += hoa_don.no_lai
-
             phat_sinh = hoa_don.no_lai
             loai = "ban_hang"
         else:
-            # 👉 trả nợ / đặt tiền
             cn.so_du -= hoa_don.tong_thanh_toan
-
             phat_sinh = -hoa_don.tong_thanh_toan
             loai = "khach_tra_no"
 
@@ -223,92 +202,3 @@ def confirm_sale(
     except Exception as e:
         db.rollback()
         raise HTTPException(500, str(e))
-
-
-# =========================
-# CANCEL
-# =========================
-@router.post("/cancel")
-def cancel_sale(
-    id: int,
-    db: Session = Depends(get_db),
-    user=Depends(require_roles(["admin", "nhan_vien"]))
-):
-    try:
-        hoa_don = db.execute(
-            select(HoaDonBan)
-            .where(HoaDonBan.id == id)
-            .with_for_update()
-        ).scalar_one_or_none()
-
-        if not hoa_don:
-            raise HTTPException(404, "Không tìm thấy")
-
-        if hoa_don.trang_thai == "huy":
-            return {"msg": "ALREADY_CANCELED"}
-
-        if hoa_don.trang_thai != "nhap":
-            raise HTTPException(400, "Chỉ huỷ khi đang nháp")
-
-        hoa_don.trang_thai = "huy"
-
-        db.commit()
-
-        return {"msg": "HUY_OK"}
-
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(500, str(e))
-
-
-# =========================
-# GET TODAY
-# =========================
-@router.get("/today")
-def get_today_sale(
-    db: Session = Depends(get_db),
-    user=Depends(require_roles(["admin", "nhan_vien"]))
-):
-    today = now_vn().date()
-
-    sales = (
-        db.query(HoaDonBan, KhachHang.ten_cua_hang)
-        .outerjoin(KhachHang, HoaDonBan.ma_kh == KhachHang.ma_kh)
-        .filter(
-            HoaDonBan.ngay == today,
-            HoaDonBan.ma_nv == user.ma_nv
-        )
-        .order_by(HoaDonBan.id.desc())
-        .all()
-    )
-
-    result = []
-
-    for s, ten_kh in sales:
-
-        chi_tiet = (
-            db.query(HoaDonBanChiTiet, SanPham.ten_sp)
-            .join(SanPham, HoaDonBanChiTiet.ma_sp == SanPham.ma_sp)
-            .filter(HoaDonBanChiTiet.id_hoa_don == s.id)
-            .all()
-        )
-
-        items = []
-
-        for ct, ten_sp in chi_tiet:
-            items.append({
-                "ten_sp": ten_sp,
-                "so_luong": float(ct.so_luong),
-                "don_gia": float(ct.don_gia),
-                "thanh_tien": float(ct.thanh_tien)
-            })
-
-        result.append({
-            "id": s.id,
-            "ten_kh": ten_kh or "",
-            "tong_tien": float(s.tong_thanh_toan or 0),
-            "trang_thai": s.trang_thai,
-            "items": items
-        })
-
-    return result
