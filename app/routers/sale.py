@@ -168,8 +168,8 @@ def confirm_sale(
                     ngay=now
                 ))
 
-        # =========================
-        # QUỸ
+         # =========================
+        # 🔥 FIX QUỸ THEO ROLE (CHỈ SỬA ĐOẠN NÀY)
         # =========================
         quy_ct = db.query(QuyCongTyChotNgay).with_for_update().first()
         quy_nv = db.query(QuyNhanVienChotNgay)\
@@ -177,13 +177,19 @@ def confirm_sale(
             .with_for_update().first()
 
         if hoa_don.tien_mat > 0:
-            quy_nv.so_du += hoa_don.tien_mat
+            if user.vai_tro == "admin":
+                # 👉 admin: tiền mặt vào quỹ công ty
+                quy_ct.tien_mat += hoa_don.tien_mat
+            else:
+                # 👉 nhân viên: tiền mặt vào quỹ nhân viên
+                quy_nv.so_du += hoa_don.tien_mat
 
         if hoa_don.tien_ck > 0:
+            # 👉 chuyển khoản luôn vào công ty
             quy_ct.tien_ngan_hang += hoa_don.tien_ck
 
         # =========================
-        # 🔥 CÔNG NỢ (FIX QUAN TRỌNG)
+        # CÔNG NỢ
         # =========================
         cn = db.query(CongNoKhachHang)\
             .filter_by(ma_kh=hoa_don.ma_kh)\
@@ -195,15 +201,11 @@ def confirm_sale(
             db.flush()
 
         if chi_tiets:
-            # 👉 bán hàng
             cn.so_du += hoa_don.no_lai
-
             phat_sinh = hoa_don.no_lai
             loai = "ban_hang"
         else:
-            # 👉 trả nợ / đặt tiền
             cn.so_du -= hoa_don.tong_thanh_toan
-
             phat_sinh = -hoa_don.tong_thanh_toan
             loai = "khach_tra_no"
 
@@ -223,7 +225,6 @@ def confirm_sale(
     except Exception as e:
         db.rollback()
         raise HTTPException(500, str(e))
-
 
 # =========================
 # CANCEL
