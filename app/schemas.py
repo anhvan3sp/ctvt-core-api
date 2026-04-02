@@ -5,7 +5,13 @@ from decimal import Decimal
 from enum import Enum
 from pydantic import field_validator, model_validator
 from typing import Optional, Literal
-
+# thanh toán( nợ, đặt hàng)
+class PaymentCreate(BaseModel):
+    ma_kh: str
+    tien_mat: float = 0
+    tien_ck: float = 0
+    noi_dung: str | None = None
+    idempotency_key: str | None = None
 # =====================================================
 # 🔥 ĐẦU KỲ (GIỮ FILE CŨ + FIX)
 # =====================================================
