@@ -44,27 +44,24 @@ def create_sale(
     try:
         now = now_vn()
 
+        if not data.items:
+            raise HTTPException(400, "Không có sản phẩm")
+
         tong_tien = Decimal("0")
 
-        # 🔥 CHO PHÉP KHÔNG CÓ ITEM
-        if data.items:
-            for item in data.items:
-                sl = to_decimal(item.so_luong)
-                gia = to_decimal(item.don_gia)
+        for item in data.items:
+            sl = to_decimal(item.so_luong)
+            gia = to_decimal(item.don_gia)
 
-                if sl <= 0:
-                    raise HTTPException(400, "Số lượng phải > 0")
+            if sl <= 0:
+                raise HTTPException(400, "Số lượng phải > 0")
 
-                tong_tien += sl * gia
+            tong_tien += sl * gia
 
         tien_mat = to_decimal(data.tien_mat)
         tien_ck = to_decimal(data.tien_ck)
         tong_thanh_toan = tien_mat + tien_ck
         no_lai = tong_tien - tong_thanh_toan
-
-        # 🔥 CHẶN TRƯỜNG HỢP RỖNG
-        if tong_tien == 0 and tong_thanh_toan <= 0:
-            raise HTTPException(400, "Không có dữ liệu")
 
         # =========================
         # TẠO NHÁP
@@ -80,31 +77,29 @@ def create_sale(
             tien_ck=tien_ck,
             tong_thanh_toan=tong_thanh_toan,
             no_lai=no_lai,
-            trang_thai="nhap"
+            trang_thai="nhap"   # 🔥 KHÁC DUY NHẤT
         )
 
         db.add(hoa_don)
         db.flush()
 
         # =========================
-        # CHI TIẾT (CÓ THÌ MỚI ADD)
+        # CHI TIẾT
         # =========================
         chi_tiet = []
-        if data.items:
-            for item in data.items:
-                sl = to_decimal(item.so_luong)
-                gia = to_decimal(item.don_gia)
+        for item in data.items:
+            sl = to_decimal(item.so_luong)
+            gia = to_decimal(item.don_gia)
 
-                chi_tiet.append(HoaDonBanChiTiet(
-                    id_hoa_don=hoa_don.id,
-                    ma_sp=item.ma_sp,
-                    so_luong=sl,
-                    don_gia=gia,
-                    thanh_tien=sl * gia
-                ))
+            chi_tiet.append(HoaDonBanChiTiet(
+                id_hoa_don=hoa_don.id,
+                ma_sp=item.ma_sp,
+                so_luong=sl,
+                don_gia=gia,
+                thanh_tien=sl * gia
+            ))
 
-        if chi_tiet:
-            db.add_all(chi_tiet)
+        db.add_all(chi_tiet)
 
         db.commit()
         return {"message": "Đã lưu nháp", "id": hoa_don.id}
@@ -115,7 +110,7 @@ def create_sale(
 
 
 # =========================
-# CONFIRM
+# CONFIRM (THỰC SỰ GHI SỔ)
 # =========================
 @router.post("/confirm")
 def confirm_sale(
@@ -126,6 +121,7 @@ def confirm_sale(
     try:
         now = now_vn()
 
+        # 🔥 LOCK
         hoa_don = db.execute(
             select(HoaDonBan)
             .where(HoaDonBan.id == id)
@@ -145,28 +141,27 @@ def confirm_sale(
             .filter_by(id_hoa_don=id).all()
 
         # =========================
-        # 🔥 CHỈ TRỪ KHO KHI CÓ SP
+        # TRỪ KHO
         # =========================
-        if chi_tiets:
-            for item in chi_tiets:
-                ton = db.query(TonKhoChotNgay)\
-                    .filter_by(ma_kho=hoa_don.ma_kho, ma_sp=item.ma_sp)\
-                    .with_for_update()\
-                    .first()
+        for item in chi_tiets:
+            ton = db.query(TonKhoChotNgay)\
+                .filter_by(ma_kho=hoa_don.ma_kho, ma_sp=item.ma_sp)\
+                .with_for_update()\
+                .first()
 
-                if not ton or ton.so_luong < item.so_luong:
-                    raise HTTPException(400, "Không đủ hàng")
+            if not ton or ton.so_luong < item.so_luong:
+                raise HTTPException(400, "Không đủ hàng")
 
-                ton.so_luong -= item.so_luong
+            ton.so_luong -= item.so_luong
 
-                db.add(NhatKyKho(
-                    ma_kho=hoa_don.ma_kho,
-                    ma_sp=item.ma_sp,
-                    loai="xuat",
-                    so_luong=item.so_luong,
-                    ma_nv=user.ma_nv,
-                    ngay=now
-                ))
+            db.add(NhatKyKho(
+                ma_kho=hoa_don.ma_kho,
+                ma_sp=item.ma_sp,
+                loai="xuat",
+                so_luong=item.so_luong,
+                ma_nv=user.ma_nv,
+                ngay=now
+            ))
 
         # =========================
         # QUỸ
@@ -183,7 +178,7 @@ def confirm_sale(
             quy_ct.tien_ngan_hang += hoa_don.tien_ck
 
         # =========================
-        # 🔥 CÔNG NỢ (FIX QUAN TRỌNG)
+        # CÔNG NỢ
         # =========================
         cn = db.query(CongNoKhachHang)\
             .filter_by(ma_kh=hoa_don.ma_kh)\
@@ -194,26 +189,18 @@ def confirm_sale(
             db.add(cn)
             db.flush()
 
-        if chi_tiets:
-            # 👉 bán hàng
-            cn.so_du += hoa_don.no_lai
-
-            phat_sinh = hoa_don.no_lai
-            loai = "ban_hang"
-        else:
-            # 👉 trả nợ / đặt tiền
-            cn.so_du -= hoa_don.tong_thanh_toan
-
-            phat_sinh = -hoa_don.tong_thanh_toan
-            loai = "khach_tra_no"
+        cn.so_du += hoa_don.no_lai
 
         db.add(CongNoKhachHangLog(
             ma_kh=hoa_don.ma_kh,
             ngay=now,
-            phat_sinh=phat_sinh,
-            loai=loai
+            phat_sinh=hoa_don.no_lai,
+            loai="ban_hang"
         ))
 
+        # =========================
+        # UPDATE TRẠNG THÁI
+        # =========================
         hoa_don.trang_thai = "xac_nhan"
 
         db.commit()
@@ -261,9 +248,11 @@ def cancel_sale(
         raise HTTPException(500, str(e))
 
 
+
 # =========================
-# GET TODAY
+# GET TODAY (SALE )
 # =========================
+
 @router.get("/today")
 def get_today_sale(
     db: Session = Depends(get_db),
