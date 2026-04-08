@@ -388,8 +388,8 @@ class GasDu(Base):
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
 
-    thoi_diem = Column(DateTime, nullable=False, default=func.now())
-
+    
+    thoi_diem = Column(DateTime, nullable=False)
     loai = Column(
         Enum(
             "phat_sinh",
