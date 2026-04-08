@@ -382,3 +382,39 @@ class CongNoNCCLog(Base):
     ref_id = Column(Integer)
 
     created_at = Column(DateTime, default=datetime.now)
+
+class GasDu(Base):
+    __tablename__ = "gas_du"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+
+    thoi_diem = Column(DateTime, nullable=False, default=func.now())
+
+    loai = Column(
+        Enum(
+            "phat_sinh",
+            "ban",
+            "quy_doi_ncc",
+            "dieu_chinh",
+            name="gas_du_loai"
+        ),
+        nullable=False
+    )
+
+    ma_sp_goc = Column(String(50), nullable=False)
+    ma_sp_quy_doi = Column(String(50))
+
+    so_kg = Column(Numeric(10, 2), nullable=False)
+    don_gia = Column(Numeric(18, 2))
+    thanh_tien = Column(Numeric(18, 2))
+
+    id_hoa_don_ban = Column(Integer, ForeignKey("hoa_don_ban.id"))
+    id_phieu_nhap = Column(Integer)
+
+    ma_kh = Column(String(50))
+    ma_nv = Column(String(50))
+    ma_kho = Column(String(20))
+
+    ghi_chu = Column(Text)
+
+    created_at = Column(DateTime, server_default=func.now())
