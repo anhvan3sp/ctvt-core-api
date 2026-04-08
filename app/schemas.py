@@ -186,7 +186,7 @@ class HoaDonNhapResponse(BaseModel):
 class HoaDonBanItemCreate(BaseModel):
     ma_sp: str
     so_luong: Decimal = Field(..., gt=0)
-    don_gia: Decimal = Field(..., gt=0)
+    don_gia: Decimal = Field(..., ge=0)
 
 
 class HoaDonBanCreate(BaseModel):
