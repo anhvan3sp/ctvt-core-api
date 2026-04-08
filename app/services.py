@@ -13,6 +13,7 @@ from app.models import (
     ThuChi,
     NhanVien,
     KhachHang,
+    GasDu,
     SanPham
 )
 
@@ -346,3 +347,74 @@ def create_hoa_don_ban(db: Session, data: HoaDonBanCreate, user: NhanVien):
             })
 
         return hoa_don
+
+
+# gas  dư
+
+def now_vn():
+    return datetime.utcnow() + timedelta(hours=7)
+
+def create_gas_du(
+    db: Session,
+    *,
+    loai: str,
+    ma_sp_goc: str,
+    so_kg: float,
+    don_gia: float | None,
+    id_hoa_don_ban: int | None,
+    ma_kh: str | None,
+    ma_nv: str | None,
+    ma_kho: str | None,
+):
+    thanh_tien = None
+    if don_gia:
+        thanh_tien = so_kg * don_gia
+
+    record = GasDu(
+        thoi_diem=now_vn(),
+        loai=loai,
+        ma_sp_goc=ma_sp_goc,
+        so_kg=so_kg,
+        don_gia=don_gia,
+        thanh_tien=thanh_tien,
+        id_hoa_don_ban=id_hoa_don_ban,
+        ma_kh=ma_kh,
+        ma_nv=ma_nv,
+        ma_kho=ma_kho,
+    )
+
+    db.add(record)
+
+# gắn vào flow sale
+
+
+def confirm_sale(db, hoa_don, gas_du_items: list):
+
+    if hoa_don.trang_thai != "nhap":
+        raise Exception("Chỉ xác nhận hóa đơn nháp")
+
+    # 1. đổi trạng thái
+    hoa_don.trang_thai = "xac_nhan"
+
+    # 2. trừ kho (đã có)
+    # ...
+
+    # 3. ghi quỹ (đã có)
+    # ...
+
+    # 4. 🔥 GHI GAS DƯ
+    for item in gas_du_items:
+        if item["so_kg"] <= 0:
+            continue
+
+        create_gas_du(
+            db,
+            loai="phat_sinh",
+            ma_sp_goc=item["ma_sp_goc"],
+            so_kg=item["so_kg"],
+            don_gia=item.get("don_gia"),
+            id_hoa_don_ban=hoa_don.id,
+            ma_kh=hoa_don.ma_kh,
+            ma_nv=hoa_don.ma_nv,
+            ma_kho=hoa_don.ma_kho,
+        )
