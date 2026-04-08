@@ -190,7 +190,7 @@ class HoaDonBanItemCreate(BaseModel):
 
 
 class HoaDonBanCreate(BaseModel):
-    ngay: Optional[date] = None
+    ngay: date
     ma_kh: str
     ma_kho: str
     tien_mat: Decimal = Decimal("0")
