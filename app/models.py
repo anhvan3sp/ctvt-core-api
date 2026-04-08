@@ -1,9 +1,10 @@
 import enum
 from datetime import datetime
 from sqlalchemy.sql import func
+ 
 from sqlalchemy import (
     Column, Integer, String, Date, DateTime, Enum, ForeignKey,
-    DECIMAL, BigInteger, Text, CheckConstraint, Index
+    DECIMAL, BigInteger, Text, CheckConstraint, Index, Numeric
 )
 from app.database import Base
 
