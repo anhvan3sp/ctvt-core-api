@@ -81,7 +81,7 @@ def apply_gas_du(
     ))
 
 def create_gas_du_service(db: Session, payload: dict, user):
-
+    with db.begin():   # 🔥 chuẩn nhất
     items = payload.get("items", [])
     ma_kho = payload.get("ma_kho")
 
@@ -130,7 +130,7 @@ def create_gas_du_service(db: Session, payload: dict, user):
             don_gia=don_gia,
             thanh_tien=thanh_tien
         ))
-    db.commit()   # 🔥 THÊM DÒNG NÀY
+   
     hoa_don.tong_tien = tong_tien
 
     return {
