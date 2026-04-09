@@ -79,6 +79,55 @@ def apply_gas_du(
         created_at=now_vn(),
     ))
 
+def create_gas_du_service(db: Session, payload: dict, user):
+
+    items = payload.get("items", [])
+    ma_kho = payload.get("ma_kho")
+
+    if not items:
+        raise HTTPException(400, "Không có sản phẩm")
+
+    hoa_don = HoaDonGasDu(
+        ma_kho=ma_kho,
+        tien_mat=payload.get("tien_mat", 0),
+        tien_ck=payload.get("tien_ck", 0),
+        trang_thai="nhap",
+        created_at=now_vn()
+    )
+
+    db.add(hoa_don)
+    db.flush()
+
+    tong_tien = Decimal("0")
+
+    for item in items:
+        so_luong_vo = Decimal(str(item["so_luong_vo"]))
+        quy_doi_kg = Decimal(str(item["quy_doi_kg"]))
+        don_gia = Decimal(str(item["don_gia"]))
+
+        tong_kg = so_luong_vo * quy_doi_kg
+        thanh_tien = tong_kg * don_gia
+
+        tong_tien += thanh_tien
+
+        db.add(HoaDonGasDuChiTiet(
+            id_hoa_don=hoa_don.id,
+            ma_sp_vo=item["ma_sp_vo"],
+            so_luong_vo=so_luong_vo,
+            quy_doi_kg=quy_doi_kg,
+            tong_kg=tong_kg,
+            don_gia=don_gia,
+            thanh_tien=thanh_tien
+        ))
+
+    hoa_don.tong_tien = tong_tien
+
+    return {
+        "id": hoa_don.id,
+        "tong_tien": float(tong_tien)
+    }
+
+
 def confirm_gas_du_service(db: Session, hoa_don: HoaDonGasDu, user):
 
     if hoa_don.trang_thai == "xac_nhan":
