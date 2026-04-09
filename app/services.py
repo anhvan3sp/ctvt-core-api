@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import func, text, desc
 from decimal import Decimal
-
+from app.models import HoaDonGasDuChiTiet  # nhớ import
 from fastapi import HTTPException
 from datetime import datetime, timedelta
 
@@ -100,7 +100,7 @@ def create_gas_du_service(db: Session, payload: dict, user):
 
     tong_tien = Decimal("0")
 
-    from app.models import HoaDonGasDuChiTiet  # nhớ import
+    
 
     for item in items:
         so_luong_vo = Decimal(str(item["so_luong_vo"]))
