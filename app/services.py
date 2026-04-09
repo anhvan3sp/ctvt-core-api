@@ -140,54 +140,64 @@ def create_gas_du_service(db: Session, payload: dict, user):
 
 def confirm_gas_du_service(db, id, user):
 
-    hd = db.query(HoaDonGasDu).filter_by(id=id).first()
+    with db.begin():  # 🔥 FIX: tránh vỡ dữ liệu
 
-    if not hd:
-        raise Exception("Không tìm thấy")
+        hd = db.query(HoaDonGasDu)\
+            .with_for_update()\
+            .filter_by(id=id)\
+            .first()
 
-    if hd.trang_thai == "xac_nhan":
-        raise Exception("Đã confirm")
+        if not hd:
+            raise Exception("Không tìm thấy")
 
-    items = hd.items  # nếu có relationship
+        if hd.trang_thai == "xac_nhan":
+            raise Exception("Đã confirm")
 
-    for item in items:
+        # 🔥 FIX: không phụ thuộc relationship
+        items = db.query(HoaDonGasDuChiTiet)\
+            .filter_by(id_hoa_don=hd.id)\
+            .all()
 
-        tong_kg = item.so_luong_vo * item.quy_doi_kg
-        kg_ban = item.kg_ban
-        kg_du = tong_kg - kg_ban
+        for item in items:
 
-        # 1. trừ bình
-        db.execute("""
-            UPDATE ton_kho_chot_ngay
-            SET so_luong = so_luong - :sl
-            WHERE ma_sp = :ma_sp AND ma_kho = :kho
-        """, {
-            "sl": item.so_luong_vo,
-            "ma_sp": item.ma_sp_vo,
-            "kho": hd.ma_kho
-        })
+            tong_kg = item.so_luong_vo * item.quy_doi_kg
+            kg_ban = item.kg_ban
+            kg_du = tong_kg - kg_ban
 
-        # 2. cộng gas dư
-        apply_gas_du(
-            db,
-            ma_sp_goc=item.ma_sp_vo,
-            ma_kho=hd.ma_kho,
-            delta_kg=kg_du,
-            loai="phat_sinh",
-            ref_id=hd.id
-        )
+            # 1. TRỪ BÌNH
+            db.execute("""
+                UPDATE ton_kho_chot_ngay
+                SET so_luong = so_luong - :sl
+                WHERE ma_sp = :ma_sp AND ma_kho = :kho
+            """, {
+                "sl": item.so_luong_vo,
+                "ma_sp": item.ma_sp_vo,
+                "kho": hd.ma_kho
+            })
 
-        # 3. bán gas dư
-        apply_gas_du(
-            db,
-            ma_sp_goc=item.ma_sp_vo,
-            ma_kho=hd.ma_kho,
-            delta_kg=-kg_ban,
-            loai="ban",
-            ref_id=hd.id
-        )
+            # 2. NHẬP GAS DƯ
+            if kg_du > 0:
+                apply_gas_du(
+                    db,
+                    ma_sp_goc=item.ma_sp_vo,
+                    ma_kho=hd.ma_kho,
+                    delta_kg=kg_du,
+                    loai="nhap_du",   # 🔥 FIX
+                    ref_id=hd.id
+                )
 
-    hd.trang_thai = "xac_nhan"
+            # 3. BÁN GAS DƯ
+            if kg_ban > 0:
+                apply_gas_du(
+                    db,
+                    ma_sp_goc=item.ma_sp_vo,
+                    ma_kho=hd.ma_kho,
+                    delta_kg=-kg_ban,
+                    loai="xuat_ban",  # 🔥 FIX
+                    ref_id=hd.id
+                )
+
+        hd.trang_thai = "xac_nhan"
 
 
 # =====================================================
