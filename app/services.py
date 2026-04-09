@@ -150,8 +150,7 @@ def create_gas_du_service(db: Session, payload: dict, user):
 
 def confirm_gas_du_service(db, id, user):
 
-    with db.begin():  # 🔥 FIX: tránh vỡ dữ liệu
-
+    try:
         hd = db.query(HoaDonGasDu)\
             .with_for_update()\
             .filter_by(id=id)\
@@ -163,7 +162,6 @@ def confirm_gas_du_service(db, id, user):
         if hd.trang_thai == "xac_nhan":
             raise Exception("Đã confirm")
 
-        # 🔥 FIX: không phụ thuộc relationship
         items = db.query(HoaDonGasDuChiTiet)\
             .filter_by(id_hoa_don=hd.id)\
             .all()
@@ -192,7 +190,7 @@ def confirm_gas_du_service(db, id, user):
                     ma_sp_goc=item.ma_sp_vo,
                     ma_kho=hd.ma_kho,
                     delta_kg=kg_du,
-                    loai="nhap_du",   # 🔥 FIX
+                    loai="nhap_du",
                     ref_id=hd.id
                 )
 
@@ -203,11 +201,17 @@ def confirm_gas_du_service(db, id, user):
                     ma_sp_goc=item.ma_sp_vo,
                     ma_kho=hd.ma_kho,
                     delta_kg=-kg_ban,
-                    loai="xuat_ban",  # 🔥 FIX
+                    loai="xuat_ban",
                     ref_id=hd.id
                 )
 
         hd.trang_thai = "xac_nhan"
+
+        db.commit()   # 🔥 QUAN TRỌNG
+
+    except Exception as e:
+        db.rollback()
+        raise e
 
 
 # =====================================================
