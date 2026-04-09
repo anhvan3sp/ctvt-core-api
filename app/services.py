@@ -130,7 +130,7 @@ def create_gas_du_service(db: Session, payload: dict, user):
             don_gia=don_gia,
             thanh_tien=thanh_tien
         ))
-
+    db.commit()   # 🔥 THÊM DÒNG NÀY
     hoa_don.tong_tien = tong_tien
 
     return {
