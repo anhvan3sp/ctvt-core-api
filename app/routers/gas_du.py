@@ -26,6 +26,7 @@ def create_gas_du(
     except HTTPException:
         raise
     except Exception as e:
+        traceback.print_exc()   # 🔥 thêm dòng này
         raise HTTPException(500, str(e))
 
 
