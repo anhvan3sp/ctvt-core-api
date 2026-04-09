@@ -1,45 +1,50 @@
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import List, Optional, Literal
 from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
 from pydantic import field_validator, model_validator
-from typing import Optional, Literal
-# thanh toán( nợ, đặt hàng)
+
+
+# ======================
+# PAYMENT
+# ======================
 class PaymentCreate(BaseModel):
     ma_kh: str
-    tien_mat: float = 0
-    tien_ck: float = 0
-    noi_dung: str | None = None
-    idempotency_key: str | None = None
+    tien_mat: Decimal = Decimal("0")
+    tien_ck: Decimal = Decimal("0")
+    noi_dung: Optional[str] = None
+    idempotency_key: Optional[str] = None
+
+
 # =====================================================
-# 🔥 ĐẦU KỲ (GIỮ FILE CŨ + FIX)
+# 🔥 ĐẦU KỲ
 # =====================================================
 
 class TonKhoDauKy(BaseModel):
     ma_sp: str
     ma_kho: str
-    so_luong: float
+    so_luong: Decimal
 
 
 class QuyNhanVienDauKy(BaseModel):
     ma_nv: str
-    so_du: float
+    so_du: Decimal
 
 
 class CongNoKhachHangDauKy(BaseModel):
     ma_kh: str
-    so_no: float
+    so_no: Decimal
 
 
 class CongNoNCCDauKy(BaseModel):
     ma_ncc: str
-    so_no: float
+    so_no: Decimal
 
 
 class QuyCongTyDauKy(BaseModel):
-    tien_mat: float = 0
-    tien_ngan_hang: float = 0
+    tien_mat: Decimal = Decimal("0")
+    tien_ngan_hang: Decimal = Decimal("0")
 
 
 class KhoiTaoDauKyRequest(BaseModel):
@@ -49,21 +54,6 @@ class KhoiTaoDauKyRequest(BaseModel):
     quy_cong_ty: QuyCongTyDauKy
     cong_no_khach: List[CongNoKhachHangDauKy] = Field(default_factory=list)
     cong_no_ncc: List[CongNoNCCDauKy] = Field(default_factory=list)
-
-
-# =====================================================
-# 🔥 CÔNG NỢ CHI TIẾT (GIỮ NGUYÊN)
-# =====================================================
-
-class DebtDetailResponse(BaseModel):
-    ma_hoa_don: str
-    ngay: date
-    tong_tien: float
-    da_tra: float
-    con_no: float
-
-    class Config:
-        from_attributes = True
 
 
 # =====================================================
@@ -84,8 +74,6 @@ class DoiTuong(str, Enum):
     cong_ty = "cong_ty"
     nhan_vien = "nhan_vien"
 
-
-# 🔥 NEW ENUM (PHÁT SINH)
 
 class TrangThaiPhatSinh(str, Enum):
     nhap = "nhap"
@@ -120,6 +108,7 @@ class SupplierBase(BaseModel):
 
 class SupplierResponse(SupplierBase):
     id: int
+
     class Config:
         orm_mode = True
 
@@ -131,6 +120,7 @@ class WarehouseBase(BaseModel):
 
 class WarehouseResponse(WarehouseBase):
     id: int
+
     class Config:
         orm_mode = True
 
@@ -142,6 +132,7 @@ class ProductBase(BaseModel):
 
 class ProductResponse(ProductBase):
     id: int
+
     class Config:
         orm_mode = True
 
@@ -163,7 +154,7 @@ class HoaDonNhapCreate(BaseModel):
     tien_mat: Decimal = Decimal("0")
     tien_ck: Decimal = Decimal("0")
     items: List[HoaDonNhapItemCreate]
-    tong_tien: float
+    tong_tien: Decimal
     force: Optional[bool] = False
 
 
@@ -212,13 +203,13 @@ class HoaDonBanResponse(BaseModel):
 
 
 # =====================================================
-# THU CHI (GIỮ NGUYÊN)
+# THU CHI
 # =====================================================
 
 class ThuChiCreate(BaseModel):
     loai: Literal["thu", "chi"]
     loai_giao_dich: str
-    so_tien: float
+    so_tien: Decimal
     hinh_thuc: Literal["tien_mat", "chuyen_khoan"]
 
     ma_kh: Optional[str] = None
@@ -235,19 +226,6 @@ class ThuChiCreate(BaseModel):
             raise ValueError("Số tiền phải > 0")
         return v
 
-    @model_validator(mode="after")
-    def validate_logic(self):
-
-        if self.loai_giao_dich == "nop_tien":
-            if self.loai != "chi":
-                raise ValueError("Nộp tiền phải là chi")
-
-        if self.loai_giao_dich == "nop_them":
-            if self.loai != "thu":
-                raise ValueError("Nộp thêm phải là thu")
-
-        return self
-
 
 class ThuChiResponse(ThuChiCreate):
     id: int
@@ -258,16 +236,45 @@ class ThuChiResponse(ThuChiCreate):
 
 
 # =====================================================
-# 🔥 PHÁT SINH (NEW - CORE ERP)
+# 🔥 GAS DƯ (THÊM MỚI)
+# =====================================================
+
+class GasDuResponse(BaseModel):
+    id: int
+    thoi_diem: datetime
+    loai: str
+
+    ma_sp_goc: str
+    ma_kho: str
+
+    so_kg: Decimal
+    ton_sau_kg: Decimal
+
+    ref_type: Optional[str]
+    ghi_chu: Optional[str]
+
+    class Config:
+        orm_mode = True
+
+
+class GasDuTonResponse(BaseModel):
+    ma_sp_goc: str
+    ma_kho: str
+    ton_kg: Decimal
+
+
+# =====================================================
+# PHÁT SINH
 # =====================================================
 
 class PhatSinhCreate(BaseModel):
     ngay: date
     loai: Literal["thu", "chi"]
     loai_giao_dich: str
-    so_tien: float
+    so_tien: Decimal
     dien_giai: Optional[str] = None
-    force: bool = False  
+    force: bool = False
+
     @field_validator("so_tien")
     @classmethod
     def validate_so_tien(cls, v):
@@ -290,7 +297,7 @@ class PhatSinhResponse(BaseModel):
     ngay: date
     loai: str
     loai_giao_dich: Optional[str]
-    so_tien: float
+    so_tien: Decimal
     dien_giai: Optional[str]
     trang_thai: TrangThaiPhatSinh
 
@@ -313,7 +320,7 @@ class NopQuyRequest(BaseModel):
 
 
 # =====================================================
-# KHÁCH HÀNG (GIỮ NGUYÊN)
+# KHÁCH HÀNG
 # =====================================================
 
 class CustomerBase(BaseModel):
