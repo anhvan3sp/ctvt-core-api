@@ -440,7 +440,8 @@ class HoaDonGasDuChiTiet(Base):
     so_luong_vo = Column(Numeric(10, 2))
     quy_doi_kg = Column(Numeric(10, 2))
     tong_kg = Column(Numeric(10, 2))
-
+    kg_ban = Column(DECIMAL(10,2))   # 🔥 THÊM
+    kg_du = Column(DECIMAL(10,2))    # 🔥 THÊM
     don_gia = Column(Numeric(12, 2))
     thanh_tien = Column(Numeric(14, 2))
 
