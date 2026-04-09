@@ -100,25 +100,36 @@ def create_gas_du_service(db: Session, payload: dict, user):
 
     tong_tien = Decimal("0")
 
+    from app.models import HoaDonGasDuChiTiet  # nhớ import
+
     for item in items:
         so_luong_vo = Decimal(str(item["so_luong_vo"]))
         quy_doi_kg = Decimal(str(item["quy_doi_kg"]))
         don_gia = Decimal(str(item["don_gia"]))
-
+        kg_ban = Decimal(str(item["kg_ban"]))
+    
         tong_kg = so_luong_vo * quy_doi_kg
-        thanh_tien = tong_kg * don_gia
-
+    
+        if kg_ban < 0 or kg_ban > tong_kg:
+            raise HTTPException(400, "kg_ban không hợp lệ")
+    
+        kg_du = tong_kg - kg_ban
+        thanh_tien = kg_ban * don_gia   # 🔥 FIX
+    
         tong_tien += thanh_tien
-
+    
         db.add(HoaDonGasDuChiTiet(
             id_hoa_don=hoa_don.id,
             ma_sp_vo=item["ma_sp_vo"],
             so_luong_vo=so_luong_vo,
             quy_doi_kg=quy_doi_kg,
             tong_kg=tong_kg,
+            kg_ban=kg_ban,     # 🔥 thêm
+            kg_du=kg_du,       # 🔥 thêm
             don_gia=don_gia,
             thanh_tien=thanh_tien
         ))
+    
 
     hoa_don.tong_tien = tong_tien
 
