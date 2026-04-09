@@ -384,13 +384,17 @@ class CongNoNCCLog(Base):
 
     created_at = Column(DateTime, default=datetime.now)
 
+
+# ======================
+# GAS DƯ (FIX CHUẨN)
+# ======================
 class GasDu(Base):
     __tablename__ = "gas_du"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
 
-    
     thoi_diem = Column(DateTime, nullable=False)
+
     loai = Column(
         Enum(
             "phat_sinh",
@@ -403,19 +407,23 @@ class GasDu(Base):
     )
 
     ma_sp_goc = Column(String(50), nullable=False)
-    ma_sp_quy_doi = Column(String(50))
+    ma_kho = Column(String(20), nullable=False)
 
     so_kg = Column(Numeric(10, 2), nullable=False)
-    don_gia = Column(Numeric(18, 2))
-    thanh_tien = Column(Numeric(18, 2))
+    ton_sau_kg = Column(Numeric(12, 2), nullable=False, default=0)
 
-    id_hoa_don_ban = Column(Integer, ForeignKey("hoa_don_ban.id"))
-    id_phieu_nhap = Column(Integer)
+    id_hoa_don_ban = Column(Integer, ForeignKey("hoa_don_ban.id"), nullable=True)
+    id_phieu_nhap = Column(Integer, nullable=True)
 
     ma_kh = Column(String(50))
     ma_nv = Column(String(50))
-    ma_kho = Column(String(20))
 
     ghi_chu = Column(Text)
+    ref_type = Column(String(50))
 
-    created_at = Column(DateTime, server_default=func.now())
+    created_at = Column(DateTime)
+
+    __table_args__ = (
+        Index("idx_sp_kho", "ma_sp_goc", "ma_kho", "id"),
+        Index("idx_sp_kho_time", "ma_sp_goc", "ma_kho", "thoi_diem"),
+    )
