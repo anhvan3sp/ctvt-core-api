@@ -44,6 +44,7 @@ def confirm_gas_du(
     except HTTPException:
         raise
     except Exception as e:
+        traceback.print_exc()   # 🔥 log lỗi thật
         raise HTTPException(500, str(e))
 
 
