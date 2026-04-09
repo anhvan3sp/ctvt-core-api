@@ -249,7 +249,7 @@ class ThuChiResponse(ThuChiCreate):
 
 
 # =====================================================
-# 🔥 GAS DƯ (THÊM MỚI)
+# 🔥 GAS DƯ RESPONSE
 # =====================================================
 
 class GasDuResponse(BaseModel):
@@ -261,7 +261,7 @@ class GasDuResponse(BaseModel):
     ma_kho: str
 
     so_kg: Decimal
-    ton_sau_kg: Decimal
+    ton_sau: Decimal   # 🔥 FIX: đồng bộ DB (không dùng ton_sau_kg nữa)
 
     ref_type: Optional[str]
     ghi_chu: Optional[str]
@@ -274,18 +274,65 @@ class GasDuTonResponse(BaseModel):
     ma_sp_goc: str
     ma_kho: str
     ton_kg: Decimal
-# ======================
-# GAS DƯ APPLY
-# ======================
+
+
+# =====================================================
+# 🔥 GAS DƯ CREATE (TẠO HÓA ĐƠN)
+# =====================================================
 
 class GasDuItem(BaseModel):
-    ma_sp: str
-    so_kg_thuc_te: Decimal
+    ma_sp_vo: str
+    so_luong_vo: float
+    quy_doi_kg: float
+
+    kg_ban: float   # 🔥 bắt buộc
+    don_gia: float
+
+    # ===== VALIDATION =====
+    @validator("so_luong_vo", "quy_doi_kg", "don_gia")
+    def validate_positive(cls, v):
+        if v < 0:
+            raise ValueError("Giá trị không được âm")
+        return v
+
+    @validator("kg_ban")
+    def validate_kg_ban(cls, v):
+        if v < 0:
+            raise ValueError("kg_ban không được âm")
+        return v
+
+
+class GasDuCreate(BaseModel):
+    ma_kho: str
+    tien_mat: float = 0
+    tien_ck: float = 0
+    items: List[GasDuItem]
+
+    @validator("tien_mat", "tien_ck")
+    def validate_money(cls, v):
+        if v < 0:
+            raise ValueError("Tiền không hợp lệ")
+        return v
+
+
+# =====================================================
+# 🔥 GAS DƯ APPLY (ÁP DỤNG VÀO HÓA ĐƠN BÁN)
+# =====================================================
+
+class GasDuApplyItem(BaseModel):
+    ma_sp_goc: str
+    kg_su_dung: float   # 🔥 CHỈ dùng kg
+
+    @validator("kg_su_dung")
+    def validate_kg(cls, v):
+        if v <= 0:
+            raise ValueError("kg_su_dung phải > 0")
+        return v
 
 
 class GasDuApplySaleRequest(BaseModel):
     id_hoa_don: int
-    items: List[GasDuItem]
+    items: List[GasDuApplyItem]
 
 # =====================================================
 # PHÁT SINH
