@@ -3,12 +3,10 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select
 from decimal import Decimal
 from datetime import datetime, timedelta
-
 from app.models import KhachHang, SanPham
 from app.database import get_db
 from app.schemas import HoaDonBanCreate
 from app.auth_utils import require_roles
-
 from app.models import (
     HoaDonBan,
     HoaDonBanChiTiet,
@@ -17,8 +15,7 @@ from app.models import (
     QuyCongTyChotNgay,
     QuyNhanVienChotNgay,
     CongNoKhachHang,
-    CongNoKhachHangLog,
-    GasDu   # 🔥 ADD
+    CongNoKhachHangLog
 )
 
 router = APIRouter(prefix="/sale", tags=["Sale"])
@@ -66,6 +63,9 @@ def create_sale(
         tong_thanh_toan = tien_mat + tien_ck
         no_lai = tong_tien - tong_thanh_toan
 
+        # =========================
+        # TẠO NHÁP
+        # =========================
         hoa_don = HoaDonBan(
             ngay=now.date(),
             ngay_tao=now,
@@ -77,12 +77,15 @@ def create_sale(
             tien_ck=tien_ck,
             tong_thanh_toan=tong_thanh_toan,
             no_lai=no_lai,
-            trang_thai="nhap"
+            trang_thai="nhap"   # 🔥 KHÁC DUY NHẤT
         )
 
         db.add(hoa_don)
         db.flush()
 
+        # =========================
+        # CHI TIẾT
+        # =========================
         chi_tiet = []
         for item in data.items:
             sl = to_decimal(item.so_luong)
@@ -112,13 +115,13 @@ def create_sale(
 @router.post("/confirm")
 def confirm_sale(
     id: int,
-    payload: dict = {},   # 🔥 ADD
     db: Session = Depends(get_db),
     user=Depends(require_roles(["admin", "nhan_vien"]))
 ):
     try:
         now = now_vn()
 
+        # 🔥 LOCK
         hoa_don = db.execute(
             select(HoaDonBan)
             .where(HoaDonBan.id == id)
@@ -196,33 +199,6 @@ def confirm_sale(
         ))
 
         # =========================
-        # 🔥 GAS DƯ (OPTIONAL)
-        # =========================
-        gas_du_items = payload.get("gas_du_items", [])
-
-        for item in gas_du_items:
-            so_kg = Decimal(str(item.get("so_kg", 0)))
-
-            if so_kg <= 0:
-                continue
-
-            don_gia = Decimal(str(item.get("don_gia", 0)))
-            thanh_tien = so_kg * don_gia
-
-            db.add(GasDu(
-                thoi_diem=now,
-                loai="phat_sinh",
-                ma_sp_goc=item["ma_sp_goc"],
-                so_kg=so_kg,
-                don_gia=don_gia,
-                thanh_tien=thanh_tien,
-                id_hoa_don_ban=hoa_don.id,
-                ma_kh=hoa_don.ma_kh,
-                ma_nv=hoa_don.ma_nv,
-                ma_kho=hoa_don.ma_kho
-            ))
-
-        # =========================
         # UPDATE TRẠNG THÁI
         # =========================
         hoa_don.trang_thai = "xac_nhan"
@@ -272,9 +248,11 @@ def cancel_sale(
         raise HTTPException(500, str(e))
 
 
+
 # =========================
-# GET TODAY
+# GET TODAY (SALE )
 # =========================
+
 @router.get("/today")
 def get_today_sale(
     db: Session = Depends(get_db),
