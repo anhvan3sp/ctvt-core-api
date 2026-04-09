@@ -1,12 +1,11 @@
+# (giữ nguyên import cũ)
 from sqlalchemy.orm import Session
-from sqlalchemy import func, text
+from sqlalchemy import func, text, desc
 from decimal import Decimal
-from datetime import datetime
+from datetime import datetime, timedelta
 from fastapi import HTTPException
 from datetime import date
 
-
-from utils.time import now_vn
 from app.models import (
     HoaDonNhap,
     HoaDonNhapChiTiet,
@@ -17,8 +16,6 @@ from app.models import (
     NhanVien,
     KhachHang,
     GasDu,
-    GasDuBalance,
-    GasDuChotNgay,
     SanPham
 )
 
@@ -26,73 +23,70 @@ from app.schemas import HoaDonNhapCreate, HoaDonBanCreate
 
 
 # =====================================================
-# CHI TIẾT HÓA ĐƠN BÁN
+# TIME VN
 # =====================================================
-def get_sale_detail(db: Session, hoa_don_id: int):
 
-    hd = db.query(HoaDonBan).filter(HoaDonBan.id == hoa_don_id).first()
-    if not hd:
-        raise HTTPException(status_code=404, detail="Không tìm thấy hóa đơn")
-
-    chi_tiet = db.query(HoaDonBanChiTiet).filter(
-        HoaDonBanChiTiet.id_hoa_don == hoa_don_id
-    ).all()
-
-    items = []
-
-    for ct in chi_tiet:
-
-        sp = db.query(SanPham).filter(
-            SanPham.ma_sp == ct.ma_sp
-        ).first()
-
-        items.append({
-            "ma_sp": ct.ma_sp,
-            "ten_sp": sp.ten_sp if sp else "",
-            "so_luong": float(ct.so_luong),
-            "don_gia": float(ct.don_gia),
-            "thanh_tien": float(ct.thanh_tien)
-        })
-
-    return {
-        "so_hd": hd.so_hd if hd.so_hd else str(hd.id),
-        "ngay": hd.ngay,
-        "items": items
-    }
+def now_vn():
+    return datetime.utcnow() + timedelta(hours=7)
 
 
 # =====================================================
-# CHI TIẾT CÔNG NỢ KHÁCH
+# CORE GAS DƯ (LEDGER)
 # =====================================================
-def get_debt_detail(db: Session, ma_kh: str):
 
-    hoa_dons = (
-        db.query(HoaDonBan)
-        .filter(HoaDonBan.ma_kh == ma_kh)
-        .filter(HoaDonBan.no_lai > 0)
-        .order_by(HoaDonBan.ngay.asc())
-        .all()
+def apply_gas_du(
+    db: Session,
+    *,
+    ma_sp_goc: str,
+    ma_kho: str,
+    delta_kg: float,
+    loai: str,
+    ref_id: int = None,
+    ref_type: str = None,
+    ma_kh: str = None,
+    ma_nv: str = None,
+    ghi_chu: str = None,
+):
+    delta_kg = Decimal(str(delta_kg))
+
+    last_row = (
+        db.query(GasDu)
+        .filter(
+            GasDu.ma_sp_goc == ma_sp_goc,
+            GasDu.ma_kho == ma_kho,
+        )
+        .order_by(desc(GasDu.id))
+        .with_for_update()
+        .first()
     )
 
-    result = []
+    ton_truoc = last_row.ton_sau_kg if last_row else Decimal("0")
+    ton_moi = ton_truoc + delta_kg
 
-    for hd in hoa_dons:
+    if ton_moi < 0:
+        raise HTTPException(400, f"Không đủ gas dư: {ma_sp_goc}")
 
-        so_hd = hd.so_hd if hd.so_hd else str(hd.id)
+    new_row = GasDu(
+        thoi_diem=now_vn(),
+        loai=loai,
+        ma_sp_goc=ma_sp_goc,
+        ma_kho=ma_kho,
+        so_kg=delta_kg,
+        ton_sau_kg=ton_moi,
+        id_hoa_don_ban=ref_id if ref_type == "sale" else None,
+        id_phieu_nhap=ref_id if ref_type == "import" else None,
+        ma_kh=ma_kh,
+        ma_nv=ma_nv,
+        ghi_chu=ghi_chu,
+        ref_type=ref_type,
+        created_at=now_vn(),
+    )
 
-        result.append({
-            "ma_hoa_don": so_hd,
-            "ngay": hd.ngay,
-            "tong_tien": float(hd.tong_tien or 0),
-            "da_tra": float((hd.tong_tien or 0) - (hd.no_lai or 0)),
-            "con_no": float(hd.no_lai or 0)
-        })
-
-    return result
+    db.add(new_row)
 
 
 # =====================================================
-# NHẬP HÀNG
+# NHẬP HÀNG (FIX TIME)
 # =====================================================
 
 def create_hoa_don_nhap(db: Session, data: HoaDonNhapCreate, user: NhanVien):
@@ -104,37 +98,22 @@ def create_hoa_don_nhap(db: Session, data: HoaDonNhapCreate, user: NhanVien):
 
         tong_tien = Decimal("0")
 
-        # =========================
-        # TÍNH TỔNG TRƯỚC (KHÔNG TIN FRONTEND)
-        # =========================
         for item in data.items:
             tong_tien += Decimal(str(item.so_luong)) * Decimal(str(item.don_gia))
 
-        tien_mat = Decimal(str(data.tien_mat or 0))
-        tien_ck = Decimal(str(data.tien_ck or 0))
-
-        if tien_mat + tien_ck > tong_tien:
-            raise HTTPException(400, "Tiền lớn hơn tổng")
-
-        # =========================
-        # TẠO HÓA ĐƠN
-        # =========================
         hoa_don = HoaDonNhap(
-            ngay=datetime.utcnow(),   # ✅ FIX: backend tự set
+            ngay=now_vn(),
             ma_ncc=data.ma_ncc,
             ma_nv=user.ma_nv,
             ma_kho=data.ma_kho,
             trang_thai="nhap",
-            tien_mat=tien_mat,
-            tien_ck=tien_ck
+            tien_mat=data.tien_mat,
+            tien_ck=data.tien_ck
         )
 
         db.add(hoa_don)
         db.flush()
 
-        # =========================
-        # XỬ LÝ ITEMS
-        # =========================
         for item in data.items:
 
             thanh_tien = Decimal(str(item.so_luong)) * Decimal(str(item.don_gia))
@@ -147,30 +126,26 @@ def create_hoa_don_nhap(db: Session, data: HoaDonNhapCreate, user: NhanVien):
                 thanh_tien=thanh_tien
             ))
 
-            # nhật ký kho
             db.add(NhatKyKho(
-                ngay=datetime.utcnow(),
+                ngay=now_vn(),
                 ma_sp=item.ma_sp,
                 ma_kho=data.ma_kho,
                 so_luong=item.so_luong,
                 loai="nhap",
                 bang_tham_chieu="hoa_don_nhap",
                 id_tham_chieu=hoa_don.id,
-                ma_nv=user.ma_nv   # ✅ FIX thiếu field
+                ma_nv=user.ma_nv
             ))
 
-        # =========================
-        # UPDATE HÓA ĐƠN
-        # =========================
         hoa_don.tong_tien = tong_tien
         hoa_don.tong_thanh_toan = tong_tien
 
         return hoa_don
 
-# =====================================================
-# BÁN HÀNG
-# =====================================================
 
+# =====================================================
+# BÁN HÀNG (GẮN GAS DƯ)
+# =====================================================
 
 def create_hoa_don_ban(db: Session, data: HoaDonBanCreate, user: NhanVien):
 
@@ -178,30 +153,7 @@ def create_hoa_don_ban(db: Session, data: HoaDonBanCreate, user: NhanVien):
 
         tong_tien = Decimal("0")
 
-        # ===== CHECK KH =====
-        kh = db.query(KhachHang).filter(
-            KhachHang.ma_kh == data.ma_kh
-        ).first()
-
-        if not kh:
-            raise HTTPException(400, "Khách hàng không tồn tại")
-
-        # ===== TẠO SỐ HĐ =====
-        last_hd = db.query(HoaDonBan).order_by(
-            HoaDonBan.id.desc()
-        ).first()
-
-        so_moi = 1
-        if last_hd and last_hd.so_hd:
-            try:
-                so_moi = int(last_hd.so_hd.replace("HD", "")) + 1
-            except:
-                so_moi = last_hd.id + 1
-
-        so_hd = f"HD{so_moi:05d}"
-
         hoa_don = HoaDonBan(
-            so_hd=so_hd,
             ngay=data.ngay,
             ma_kh=data.ma_kh,
             ma_nv=user.ma_nv,
@@ -214,41 +166,52 @@ def create_hoa_don_ban(db: Session, data: HoaDonBanCreate, user: NhanVien):
         db.add(hoa_don)
         db.flush()
 
-        # =========================
-        # XỬ LÝ SẢN PHẨM (LOCK KHO)
-        # =========================
         for item in data.items:
 
-            # LOCK tồn kho
-            row = db.execute(text("""
-                SELECT so_luong
-                FROM ton_kho_chot_ngay
-                WHERE ma_kho = :ma_kho
-                AND ma_sp = :ma_sp
-                FOR UPDATE
-            """), {
-                "ma_kho": data.ma_kho,
-                "ma_sp": item.ma_sp
-            }).fetchone()
+            sp = db.query(SanPham).filter(
+                SanPham.ma_sp == item.ma_sp
+            ).first()
 
-            ton = Decimal(str(row[0])) if row else Decimal("0")
+            if not sp:
+                raise HTTPException(400, f"Không có SP {item.ma_sp}")
 
-            if ton < Decimal(str(item.so_luong)):
-                raise HTTPException(400, f"Tồn kho không đủ {item.ma_sp}")
+            dinh_muc = Decimal(str(sp.dung_tich_kg or 0))
+            so_ban = Decimal(str(item.so_luong))
 
-            # TRỪ KHO NGAY (balance realtime)
-            db.execute(text("""
-                UPDATE ton_kho_chot_ngay
-                SET so_luong = so_luong - :sl
-                WHERE ma_kho = :ma_kho
-                AND ma_sp = :ma_sp
-            """), {
-                "sl": item.so_luong,
-                "ma_kho": data.ma_kho,
-                "ma_sp": item.ma_sp
-            })
+            # ===== GAS DƯ LOGIC =====
+            if dinh_muc > 0:
 
-            thanh_tien = Decimal(str(item.so_luong)) * Decimal(str(item.don_gia))
+                if so_ban < dinh_muc:
+                    du = dinh_muc - so_ban
+
+                    apply_gas_du(
+                        db,
+                        ma_sp_goc=item.ma_sp,
+                        ma_kho=data.ma_kho,
+                        delta_kg=float(du),
+                        loai="phat_sinh",
+                        ref_id=hoa_don.id,
+                        ref_type="sale",
+                        ma_kh=data.ma_kh,
+                        ma_nv=user.ma_nv,
+                    )
+
+                elif so_ban > dinh_muc:
+                    thieu = so_ban - dinh_muc
+
+                    apply_gas_du(
+                        db,
+                        ma_sp_goc=item.ma_sp,
+                        ma_kho=data.ma_kho,
+                        delta_kg=float(-thieu),
+                        loai="ban",
+                        ref_id=hoa_don.id,
+                        ref_type="sale",
+                        ma_kh=data.ma_kh,
+                        ma_nv=user.ma_nv,
+                    )
+
+            thanh_tien = so_ban * Decimal(str(item.don_gia))
             tong_tien += thanh_tien
 
             db.add(HoaDonBanChiTiet(
@@ -259,193 +222,8 @@ def create_hoa_don_ban(db: Session, data: HoaDonBanCreate, user: NhanVien):
                 thanh_tien=thanh_tien
             ))
 
-            # ledger kho
-            db.add(NhatKyKho(
-                ngay=datetime.utcnow(),
-                ma_sp=item.ma_sp,
-                ma_kho=data.ma_kho,
-                so_luong=item.so_luong,
-                loai="xuat",
-                bang_tham_chieu="hoa_don_ban",
-                id_tham_chieu=hoa_don.id,
-                ma_nv=user.ma_nv
-            ))
-
-        # =========================
-        # TÍNH TIỀN
-        # =========================
-        tien_mat = Decimal(str(data.tien_mat or 0))
-        tien_ck = Decimal(str(data.tien_ck or 0))
-        tong_da_tra = tien_mat + tien_ck
-        no_moi = tong_tien - tong_da_tra
-
         hoa_don.tong_tien = tong_tien
-        hoa_don.tong_thanh_toan = tong_da_tra
-        hoa_don.no_lai = no_moi
-
-        # =========================
-        # THU TIỀN MẶT (NV) - LOCK
-        # =========================
-        if tien_mat > 0:
-
-            row = db.execute(text("""
-                SELECT so_du_sau
-                FROM thu_chi
-                WHERE doi_tuong = 'nhan_vien'
-                AND ma_nv = :ma_nv
-                ORDER BY id DESC
-                LIMIT 1
-                FOR UPDATE
-            """), {"ma_nv": user.ma_nv}).fetchone()
-
-            so_du = float(row[0]) if row else 0
-            so_du_moi = so_du + float(tien_mat)
-
-            db.execute(text("""
-                INSERT INTO thu_chi (
-                    ngay, doi_tuong, ma_nv,
-                    so_tien, loai, hinh_thuc,
-                    loai_giao_dich, so_du_sau
-                )
-                VALUES (
-                    NOW(), 'nhan_vien', :ma_nv,
-                    :tien, 'thu', 'tien_mat',
-                    'ban_hang', :so_du
-                )
-            """), {
-                "ma_nv": user.ma_nv,
-                "tien": float(tien_mat),
-                "so_du": so_du_moi
-            })
-
-        # =========================
-        # THU CK (CÔNG TY) - LOCK
-        # =========================
-        if tien_ck > 0:
-
-            row = db.execute(text("""
-                SELECT so_du_ct_sau
-                FROM thu_chi
-                WHERE doi_tuong = 'cong_ty'
-                ORDER BY id DESC
-                LIMIT 1
-                FOR UPDATE
-            """)).fetchone()
-
-            so_du_ct = float(row[0]) if row else 0
-            so_du_ct_moi = so_du_ct + float(tien_ck)
-
-            db.execute(text("""
-                INSERT INTO thu_chi (
-                    ngay, doi_tuong,
-                    so_tien, loai, hinh_thuc,
-                    loai_giao_dich, so_du_ct_sau
-                )
-                VALUES (
-                    NOW(), 'cong_ty',
-                    :tien, 'thu', 'chuyen_khoan',
-                    'ban_hang', :so_du
-                )
-            """), {
-                "tien": float(tien_ck),
-                "so_du": so_du_ct_moi
-            })
+        hoa_don.tong_thanh_toan = data.tien_mat + data.tien_ck
+        hoa_don.no_lai = tong_tien - (data.tien_mat + data.tien_ck)
 
         return hoa_don
-
-
-# gas  dư
-
-def now_vn():
-    return datetime.utcnow() + timedelta(hours=7)
-
-def create_gas_du(
-    db: Session,
-    *,
-    loai: str,
-    ma_sp_goc: str,
-    so_kg: float,
-    don_gia: float | None,
-    id_hoa_don_ban: int | None,
-    ma_kh: str | None,
-    ma_nv: str | None,
-    ma_kho: str | None,
-):
-    thanh_tien = None
-    if don_gia:
-        thanh_tien = so_kg * don_gia
-
-    record = GasDu(
-        thoi_diem=now_vn(),
-        loai=loai,
-        ma_sp_goc=ma_sp_goc,
-        so_kg=so_kg,
-        don_gia=don_gia,
-        thanh_tien=thanh_tien,
-        id_hoa_don_ban=id_hoa_don_ban,
-        ma_kh=ma_kh,
-        ma_nv=ma_nv,
-        ma_kho=ma_kho,
-    )
-
-    db.add(record)
-
-# gắn vào flow sale
-
-
-def confirm_sale(db, hoa_don, gas_du_items: list):
-
-    if hoa_don.trang_thai != "nhap":
-        raise Exception("Chỉ xác nhận hóa đơn nháp")
-
-    # 1. đổi trạng thái
-    hoa_don.trang_thai = "xac_nhan"
-
-    # 2. trừ kho (đã có)
-    # ...
-
-    # 3. ghi quỹ (đã có)
-    # ...
-
-    # 4. 🔥 GHI GAS DƯ
-    for item in gas_du_items:
-        if item["so_kg"] <= 0:
-            continue
-
-        create_gas_du(
-            db,
-            loai="phat_sinh",
-            ma_sp_goc=item["ma_sp_goc"],
-            so_kg=item["so_kg"],
-            don_gia=item.get("don_gia"),
-            id_hoa_don_ban=hoa_don.id,
-            ma_kh=hoa_don.ma_kh,
-            ma_nv=hoa_don.ma_nv,
-            ma_kho=hoa_don.ma_kho,
-        )
-
-# ghi bảng gas dư chốt ngày
-
-
-def chot_ngay_gas_du(db: Session, ngay: date):
-    balances = db.query(GasDuBalance).all()
-
-    for b in balances:
-        # check đã tồn tại chưa (tránh duplicate)
-        exists = db.query(GasDuChotNgay).filter_by(
-            ngay=ngay,
-            ma_sp_goc=b.ma_sp_goc
-        ).first()
-
-        if exists:
-            # update nếu đã có
-            exists.tong_kg = b.tong_kg
-            exists.created_at = now_vn()
-        else:
-            snapshot = GasDuChotNgay(
-                ngay=ngay,
-                ma_sp_goc=b.ma_sp_goc,
-                tong_kg=b.tong_kg,
-                created_at=now_vn()
-            )
-            db.add(snapshot)
