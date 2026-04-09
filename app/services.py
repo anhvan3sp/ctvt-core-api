@@ -40,7 +40,7 @@ def apply_gas_du(
     delta_kg: float,
     loai: str,
     ref_id: int = None,
-    ref_type: str = "gas_du",   # FIX
+    ref_type: str = "gas_du",
     ma_kh: str = None,
     ma_nv: str = None,
     ghi_chu: str = None,
@@ -58,7 +58,8 @@ def apply_gas_du(
         .first()
     )
 
-    ton_truoc = last_row.ton_sau_kg if last_row else Decimal("0")
+    # 🔥 FIX: dùng ton_sau (không dùng ton_sau_kg nữa nếu DB đã đổi)
+    ton_truoc = last_row.ton_sau if last_row else Decimal("0")
     ton_moi = ton_truoc + delta_kg
 
     if ton_moi < 0:
@@ -70,7 +71,7 @@ def apply_gas_du(
         ma_sp_goc=ma_sp_goc,
         ma_kho=ma_kho,
         so_kg=delta_kg,
-        ton_sau_kg=ton_moi,
+        ton_sau=ton_moi,   # 🔥 FIX
         ref_type="gas_du",
         ref_id=ref_id,
         ma_kh=ma_kh,
