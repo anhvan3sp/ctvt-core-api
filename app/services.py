@@ -81,62 +81,62 @@ def apply_gas_du(
     ))
 
 def create_gas_du_service(db: Session, payload: dict, user):
-    with db.begin():   # 🔥 chuẩn nhất
-    items = payload.get("items", [])
-    ma_kho = payload.get("ma_kho")
 
-    if not items:
-        raise HTTPException(400, "Không có sản phẩm")
+    with db.begin():   # 🔥 tất cả phải thụt vào
 
-    hoa_don = HoaDonGasDu(
-        ma_kho=ma_kho,
-        tien_mat=payload.get("tien_mat", 0),
-        tien_ck=payload.get("tien_ck", 0),
-        trang_thai="nhap",
-        created_at=now_vn()
-    )
+        items = payload.get("items", [])
+        ma_kho = payload.get("ma_kho")
 
-    db.add(hoa_don)
-    db.flush()
+        if not items:
+            raise HTTPException(400, "Không có sản phẩm")
 
-    tong_tien = Decimal("0")
+        hoa_don = HoaDonGasDu(
+            ma_kho=ma_kho,
+            tien_mat=payload.get("tien_mat", 0),
+            tien_ck=payload.get("tien_ck", 0),
+            trang_thai="nhap",
+            created_at=now_vn()
+        )
 
-    for item in items:
-        so_luong_vo = Decimal(str(item["so_luong_vo"]))
-        quy_doi_kg = Decimal(str(item["quy_doi_kg"]))
-        don_gia = Decimal(str(item["don_gia"]))
-        kg_ban = Decimal(str(item["kg_ban"]))
+        db.add(hoa_don)
+        db.flush()
 
-        tong_kg = so_luong_vo * quy_doi_kg
+        tong_tien = Decimal("0")
 
-        if kg_ban < 0 or kg_ban > tong_kg:
-            raise HTTPException(400, "kg_ban không hợp lệ")
+        for item in items:
+            so_luong_vo = Decimal(str(item["so_luong_vo"]))
+            quy_doi_kg = Decimal(str(item["quy_doi_kg"]))
+            don_gia = Decimal(str(item["don_gia"]))
+            kg_ban = Decimal(str(item["kg_ban"]))
 
-        kg_du = tong_kg - kg_ban
+            tong_kg = so_luong_vo * quy_doi_kg
 
-        # 🔥 FIX QUAN TRỌNG: chỉ tính tiền phần bán
-        thanh_tien = kg_ban * don_gia
+            if kg_ban < 0 or kg_ban > tong_kg:
+                raise HTTPException(400, "kg_ban không hợp lệ")
 
-        tong_tien += thanh_tien
+            kg_du = tong_kg - kg_ban
+            thanh_tien = kg_ban * don_gia
 
-        db.add(HoaDonGasDuChiTiet(
-            id_hoa_don=hoa_don.id,
-            ma_sp_vo=item["ma_sp_vo"],
-            so_luong_vo=so_luong_vo,
-            quy_doi_kg=quy_doi_kg,
-            tong_kg=tong_kg,
-            kg_ban=kg_ban,   # 🔥 FIX
-            kg_du=kg_du,     # 🔥 FIX
-            don_gia=don_gia,
-            thanh_tien=thanh_tien
-        ))
-   
-    hoa_don.tong_tien = tong_tien
+            tong_tien += thanh_tien
 
-    return {
-        "id": hoa_don.id,
-        "tong_tien": float(tong_tien)
-    }
+            db.add(HoaDonGasDuChiTiet(
+                id_hoa_don=hoa_don.id,
+                ma_sp_vo=item["ma_sp_vo"],
+                so_luong_vo=so_luong_vo,
+                quy_doi_kg=quy_doi_kg,
+                tong_kg=tong_kg,
+                kg_ban=kg_ban,
+                kg_du=kg_du,
+                don_gia=don_gia,
+                thanh_tien=thanh_tien
+            ))
+
+        hoa_don.tong_tien = tong_tien
+
+        return {
+            "id": hoa_don.id,
+            "tong_tien": float(tong_tien)
+        }
 
 def confirm_gas_du_service(db, id, user):
 
