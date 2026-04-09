@@ -6,7 +6,7 @@ from app.database import get_db
 from app.auth_utils import require_roles
 
 from app.models import GasDu, HoaDonBan
-from app.services.gas_du_service import apply_gas_du_from_sale
+from app.services import apply_gas_du_from_sale
 
 router = APIRouter(prefix="/gas-du", tags=["gas-du"])
 
