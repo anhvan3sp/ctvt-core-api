@@ -82,14 +82,17 @@ def apply_gas_du(
 
 def create_gas_du_service(db: Session, payload: dict, user):
 
-    with db.begin():   # 🔥 tất cả phải thụt vào
+    items = payload.get("items", [])
+    ma_kho = payload.get("ma_kho")
 
-        items = payload.get("items", [])
-        ma_kho = payload.get("ma_kho")
+    # ===== VALIDATE =====
+    if not ma_kho:
+        raise HTTPException(400, "Thiếu mã kho")
 
-        if not items:
-            raise HTTPException(400, "Không có sản phẩm")
+    if not items:
+        raise HTTPException(400, "Không có sản phẩm")
 
+    try:
         hoa_don = HoaDonGasDu(
             ma_kho=ma_kho,
             tien_mat=payload.get("tien_mat", 0),
@@ -99,7 +102,7 @@ def create_gas_du_service(db: Session, payload: dict, user):
         )
 
         db.add(hoa_don)
-        db.flush()
+        db.flush()  # lấy id
 
         tong_tien = Decimal("0")
 
@@ -133,10 +136,17 @@ def create_gas_du_service(db: Session, payload: dict, user):
 
         hoa_don.tong_tien = tong_tien
 
+        db.commit()   # 🔥 QUAN TRỌNG
+        db.refresh(hoa_don)
+
         return {
             "id": hoa_don.id,
             "tong_tien": float(tong_tien)
         }
+
+    except Exception as e:
+        db.rollback()
+        raise e
 
 def confirm_gas_du_service(db, id, user):
 
