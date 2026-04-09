@@ -5,51 +5,104 @@ from sqlalchemy import desc
 from app.database import get_db
 from app.auth_utils import require_roles
 
-from app.models import GasDu, HoaDonBan
-from app.services import apply_gas_du_from_sale
+from app.models import GasDu, HoaDonGasDu
+from app.services import (
+    create_gas_du_service,
+    confirm_gas_du_service,
+)
 
 router = APIRouter(prefix="/gas-du", tags=["gas-du"])
 
 
 # =====================================================
-# APPLY GAS DƯ TỪ SALE (CHÍNH)
+# TẠO HÓA ĐƠN GAS DƯ (NHÁP)
 # =====================================================
-@router.post("/apply-sale")
-def apply_gas_du_sale(
-    id_hoa_don: int,
+@router.post("")
+def create_gas_du(
     payload: dict,
     db: Session = Depends(get_db),
     user=Depends(require_roles(["admin", "nhan_vien"]))
 ):
     try:
-        hoa_don = db.query(HoaDonBan).filter(
-            HoaDonBan.id == id_hoa_don
-        ).first()
-
-        if not hoa_don:
-            raise HTTPException(404, "Không tìm thấy hóa đơn")
-
-        if hoa_don.trang_thai != "xac_nhan":
-            raise HTTPException(400, "Phải xác nhận hóa đơn trước")
-
-        items = payload.get("items", [])
-
-        if not items:
-            raise HTTPException(400, "Không có dữ liệu gas dư")
-
-        apply_gas_du_from_sale(
-            db,
-            hoa_don=hoa_don,
-            items=items
-        )
-
+        result = create_gas_du_service(db, payload, user)
         db.commit()
-
-        return {"msg": "APPLY_GAS_DU_OK"}
-
+        return result
     except Exception as e:
         db.rollback()
         raise HTTPException(500, str(e))
+
+
+# =====================================================
+# CONFIRM HÓA ĐƠN GAS DƯ (QUAN TRỌNG NHẤT)
+# =====================================================
+@router.post("/{id}/confirm")
+def confirm_gas_du(
+    id: int,
+    db: Session = Depends(get_db),
+    user=Depends(require_roles(["admin", "nhan_vien"]))
+):
+    try:
+        result = confirm_gas_du_service(db, id, user)
+        db.commit()
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(500, str(e))
+
+
+# =====================================================
+# DANH SÁCH HÓA ĐƠN GAS DƯ
+# =====================================================
+@router.get("")
+def get_list_gas_du(
+    limit: int = 50,
+    db: Session = Depends(get_db),
+):
+    rows = (
+        db.query(HoaDonGasDu)
+        .order_by(desc(HoaDonGasDu.id))
+        .limit(limit)
+        .all()
+    )
+
+    return [
+        {
+            "id": r.id,
+            "ma_hd": r.ma_hd,
+            "tong_tien": float(r.tong_tien or 0),
+            "tien_mat": float(r.tien_mat or 0),
+            "tien_ck": float(r.tien_ck or 0),
+            "trang_thai": r.trang_thai,
+            "created_at": r.created_at
+        }
+        for r in rows
+    ]
+
+
+# =====================================================
+# CHI TIẾT HÓA ĐƠN
+# =====================================================
+@router.get("/{id}")
+def get_gas_du_detail(
+    id: int,
+    db: Session = Depends(get_db),
+):
+    hd = db.query(HoaDonGasDu).filter(HoaDonGasDu.id == id).first()
+
+    if not hd:
+        raise HTTPException(404, "Không tìm thấy hóa đơn")
+
+    return {
+        "id": hd.id,
+        "ma_hd": hd.ma_hd,
+        "tong_tien": float(hd.tong_tien or 0),
+        "tien_mat": float(hd.tien_mat or 0),
+        "tien_ck": float(hd.tien_ck or 0),
+        "trang_thai": hd.trang_thai,
+        "created_at": hd.created_at
+    }
 
 
 # =====================================================
@@ -79,7 +132,7 @@ def get_gas_du_ton(
 
 
 # =====================================================
-# LỊCH SỬ GAS DƯ
+# LỊCH SỬ GAS DƯ (LEDGER)
 # =====================================================
 @router.get("/lich-su")
 def get_gas_du_history(
@@ -107,6 +160,7 @@ def get_gas_du_history(
             "so_kg": float(r.so_kg),
             "ton_sau_kg": float(r.ton_sau_kg),
             "ref_type": r.ref_type,
+            "ref_id": r.ref_id,
             "ghi_chu": r.ghi_chu
         }
         for r in rows
