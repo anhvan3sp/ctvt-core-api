@@ -127,73 +127,56 @@ def create_gas_du_service(db: Session, payload: dict, user):
         "tong_tien": float(tong_tien)
     }
 
+def confirm_gas_du_service(db, id, user):
 
-def confirm_gas_du_service(db: Session, hoa_don: HoaDonGasDu, user):
+    hd = db.query(HoaDonGasDu).filter_by(id=id).first()
 
-    if hoa_don.trang_thai == "xac_nhan":
-        raise HTTPException(400, "Đã confirm")
+    if not hd:
+        raise Exception("Không tìm thấy")
 
-    items = hoa_don.items
+    if hd.trang_thai == "xac_nhan":
+        raise Exception("Đã confirm")
 
-    tong_tien = Decimal("0")
+    items = hd.items  # nếu có relationship
 
     for item in items:
 
-        # =====================
-        # 1. TRỪ BÌNH
-        # =====================
-        db.execute(text("""
+        tong_kg = item.so_luong_vo * item.quy_doi_kg
+        kg_ban = item.kg_ban
+        kg_du = tong_kg - kg_ban
+
+        # 1. trừ bình
+        db.execute("""
             UPDATE ton_kho_chot_ngay
             SET so_luong = so_luong - :sl
-            WHERE ma_kho = :ma_kho AND ma_sp = :ma_sp
-        """), {
+            WHERE ma_sp = :ma_sp AND ma_kho = :kho
+        """, {
             "sl": item.so_luong_vo,
-            "ma_kho": hoa_don.ma_kho,
-            "ma_sp": item.ma_sp_vo
+            "ma_sp": item.ma_sp_vo,
+            "kho": hd.ma_kho
         })
 
-        # =====================
-        # 2. CỘNG GAS DƯ
-        # =====================
-        kg = item.tong_kg
-
+        # 2. cộng gas dư
         apply_gas_du(
             db,
             ma_sp_goc=item.ma_sp_vo,
-            ma_kho=hoa_don.ma_kho,
-            delta_kg=float(kg),
+            ma_kho=hd.ma_kho,
+            delta_kg=kg_du,
             loai="phat_sinh",
-            ref_id=hoa_don.id,
-            ma_nv=user.ma_nv
+            ref_id=hd.id
         )
 
-        # =====================
-        # 3. BÁN GAS DƯ
-        # =====================
+        # 3. bán gas dư
         apply_gas_du(
             db,
             ma_sp_goc=item.ma_sp_vo,
-            ma_kho=hoa_don.ma_kho,
-            delta_kg=float(-kg),
+            ma_kho=hd.ma_kho,
+            delta_kg=-kg_ban,
             loai="ban",
-            ref_id=hoa_don.id,
-            ma_nv=user.ma_nv
+            ref_id=hd.id
         )
 
-        tong_tien += Decimal(str(item.thanh_tien))
-
-    # =====================
-    # 4. THU TIỀN (GIỐNG SALE)
-    # =====================
-    if hoa_don.tien_mat > 0:
-        # giống logic thu_chi của sale
-        pass
-
-    if hoa_don.tien_ck > 0:
-        # giống logic sale
-        pass
-
-    hoa_don.trang_thai = "xac_nhan"
+    hd.trang_thai = "xac_nhan"
 
 
 # =====================================================
