@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
-
+import traceback
 from app.database import get_db
 from app.auth_utils import require_roles
 
