@@ -261,7 +261,18 @@ class GasDuTonResponse(BaseModel):
     ma_sp_goc: str
     ma_kho: str
     ton_kg: Decimal
+# ======================
+# GAS DƯ APPLY
+# ======================
 
+class GasDuItem(BaseModel):
+    ma_sp: str
+    so_kg_thuc_te: Decimal
+
+
+class GasDuApplySaleRequest(BaseModel):
+    id_hoa_don: int
+    items: List[GasDuItem]
 
 # =====================================================
 # PHÁT SINH
