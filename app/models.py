@@ -1,7 +1,8 @@
 import enum
 from datetime import datetime
 from sqlalchemy.sql import func
- 
+
+
 from sqlalchemy import (
     Column, Integer, String, Date, DateTime, Enum, ForeignKey,
     DECIMAL, BigInteger, Text, CheckConstraint, Index, Numeric
@@ -427,3 +428,25 @@ class GasDu(Base):
         Index("idx_sp_kho", "ma_sp_goc", "ma_kho", "id"),
         Index("idx_sp_kho_time", "ma_sp_goc", "ma_kho", "thoi_diem"),
     )
+
+
+
+
+class HoaDonGasDu(Base):
+    __tablename__ = "hoa_don_gas_du"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+
+    ma_hd = Column(String(50))
+    ma_kho = Column(String(50))
+
+    tong_tien = Column(Numeric(14, 2), default=0)
+    tien_mat = Column(Numeric(14, 2), default=0)
+    tien_ck = Column(Numeric(14, 2), default=0)
+
+    trang_thai = Column(
+        Enum("nhap", "xac_nhan"),
+        default="nhap"
+    )
+
+    created_at = Column(DateTime, default=datetime.utcnow)
