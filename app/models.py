@@ -429,7 +429,20 @@ class GasDu(Base):
         Index("idx_sp_kho_time", "ma_sp_goc", "ma_kho", "thoi_diem"),
     )
 
+class HoaDonGasDuChiTiet(Base):
+    __tablename__ = "hoa_don_gas_du_ct"
 
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+
+    id_hoa_don = Column(BigInteger)
+    ma_sp_vo = Column(String(50))
+
+    so_luong_vo = Column(Numeric(10, 2))
+    quy_doi_kg = Column(Numeric(10, 2))
+    tong_kg = Column(Numeric(10, 2))
+
+    don_gia = Column(Numeric(12, 2))
+    thanh_tien = Column(Numeric(14, 2))
 
 
 class HoaDonGasDu(Base):
