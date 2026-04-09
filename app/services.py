@@ -3,7 +3,10 @@ from sqlalchemy import func, text
 from decimal import Decimal
 from datetime import datetime
 from fastapi import HTTPException
+from datetime import date
 
+
+from utils.time import now_vn
 from app.models import (
     HoaDonNhap,
     HoaDonNhapChiTiet,
@@ -14,6 +17,8 @@ from app.models import (
     NhanVien,
     KhachHang,
     GasDu,
+    GasDuBalance,
+    GasDuChotNgay,
     SanPham
 )
 
@@ -418,3 +423,29 @@ def confirm_sale(db, hoa_don, gas_du_items: list):
             ma_nv=hoa_don.ma_nv,
             ma_kho=hoa_don.ma_kho,
         )
+
+# ghi bảng gas dư chốt ngày
+
+
+def chot_ngay_gas_du(db: Session, ngay: date):
+    balances = db.query(GasDuBalance).all()
+
+    for b in balances:
+        # check đã tồn tại chưa (tránh duplicate)
+        exists = db.query(GasDuChotNgay).filter_by(
+            ngay=ngay,
+            ma_sp_goc=b.ma_sp_goc
+        ).first()
+
+        if exists:
+            # update nếu đã có
+            exists.tong_kg = b.tong_kg
+            exists.created_at = now_vn()
+        else:
+            snapshot = GasDuChotNgay(
+                ngay=ngay,
+                ma_sp_goc=b.ma_sp_goc,
+                tong_kg=b.tong_kg,
+                created_at=now_vn()
+            )
+            db.add(snapshot)
