@@ -44,11 +44,13 @@ def create_sale(
     try:
         now = now_vn()
 
+        # 🔥 FIX: cho phép không có sản phẩm (trả nợ)
         if not data.items:
-            raise HTTPException(400, "Không có sản phẩm")
-
+            data.items = []
         tong_tien = Decimal("0")
-
+        # 🔥 FIX: nếu không có sản phẩm → vẫn OK
+        if not data.items:
+            tong_tien = Decimal("0")
         for item in data.items:
             sl = to_decimal(item.so_luong)
             gia = to_decimal(item.don_gia)
