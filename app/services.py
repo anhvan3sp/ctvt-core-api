@@ -86,7 +86,68 @@ def apply_gas_du(
 
 
 # =====================================================
-# NHẬP HÀNG (FIX TIME)
+# 🔥 GAS DƯ RIÊNG (NEW - TÁCH KHỎI SALE)
+# =====================================================
+
+def apply_gas_du_from_sale(
+    db: Session,
+    hoa_don: HoaDonBan,
+    items: list
+):
+    """
+    items = [
+        {
+            "ma_sp": "GAS12",
+            "so_kg_thuc_te": 3
+        }
+    ]
+    """
+
+    for item in items:
+
+        sp = db.query(SanPham).filter(
+            SanPham.ma_sp == item["ma_sp"]
+        ).first()
+
+        if not sp or not sp.dung_tich_kg:
+            continue
+
+        dinh_muc = Decimal(str(sp.dung_tich_kg))
+        thuc_te = Decimal(str(item["so_kg_thuc_te"]))
+
+        if thuc_te == dinh_muc:
+            continue
+
+        if thuc_te < dinh_muc:
+            # sinh gas dư
+            apply_gas_du(
+                db,
+                ma_sp_goc=item["ma_sp"],
+                ma_kho=hoa_don.ma_kho,
+                delta_kg=float(dinh_muc - thuc_te),
+                loai="phat_sinh",
+                ref_id=hoa_don.id,
+                ref_type="sale",
+                ma_kh=hoa_don.ma_kh,
+                ma_nv=hoa_don.ma_nv,
+            )
+        else:
+            # lấy từ gas dư
+            apply_gas_du(
+                db,
+                ma_sp_goc=item["ma_sp"],
+                ma_kho=hoa_don.ma_kho,
+                delta_kg=float(-(thuc_te - dinh_muc)),
+                loai="ban",
+                ref_id=hoa_don.id,
+                ref_type="sale",
+                ma_kh=hoa_don.ma_kh,
+                ma_nv=hoa_don.ma_nv,
+            )
+
+
+# =====================================================
+# NHẬP HÀNG (GIỮ NGUYÊN)
 # =====================================================
 
 def create_hoa_don_nhap(db: Session, data: HoaDonNhapCreate, user: NhanVien):
@@ -144,7 +205,7 @@ def create_hoa_don_nhap(db: Session, data: HoaDonNhapCreate, user: NhanVien):
 
 
 # =====================================================
-# BÁN HÀNG (GẮN GAS DƯ)
+# BÁN HÀNG (GIỮ NGUYÊN - KHÔNG GAS DƯ)
 # =====================================================
 
 def create_hoa_don_ban(db: Session, data: HoaDonBanCreate, user: NhanVien):
@@ -175,41 +236,7 @@ def create_hoa_don_ban(db: Session, data: HoaDonBanCreate, user: NhanVien):
             if not sp:
                 raise HTTPException(400, f"Không có SP {item.ma_sp}")
 
-            dinh_muc = Decimal(str(sp.dung_tich_kg or 0))
             so_ban = Decimal(str(item.so_luong))
-
-            # ===== GAS DƯ LOGIC =====
-            if dinh_muc > 0:
-
-                if so_ban < dinh_muc:
-                    du = dinh_muc - so_ban
-
-                    apply_gas_du(
-                        db,
-                        ma_sp_goc=item.ma_sp,
-                        ma_kho=data.ma_kho,
-                        delta_kg=float(du),
-                        loai="phat_sinh",
-                        ref_id=hoa_don.id,
-                        ref_type="sale",
-                        ma_kh=data.ma_kh,
-                        ma_nv=user.ma_nv,
-                    )
-
-                elif so_ban > dinh_muc:
-                    thieu = so_ban - dinh_muc
-
-                    apply_gas_du(
-                        db,
-                        ma_sp_goc=item.ma_sp,
-                        ma_kho=data.ma_kho,
-                        delta_kg=float(-thieu),
-                        loai="ban",
-                        ref_id=hoa_don.id,
-                        ref_type="sale",
-                        ma_kh=data.ma_kh,
-                        ma_nv=user.ma_nv,
-                    )
 
             thanh_tien = so_ban * Decimal(str(item.don_gia))
             tong_tien += thanh_tien
