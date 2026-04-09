@@ -55,6 +55,19 @@ class KhoiTaoDauKyRequest(BaseModel):
     cong_no_khach: List[CongNoKhachHangDauKy] = Field(default_factory=list)
     cong_no_ncc: List[CongNoNCCDauKy] = Field(default_factory=list)
 
+# =====================================================
+# 🔥 CÔNG NỢ CHI TIẾT (GIỮ NGUYÊN)
+# =====================================================
+
+class DebtDetailResponse(BaseModel):
+    ma_hoa_don: str
+    ngay: date
+    tong_tien: float
+    da_tra: float
+    con_no: float
+
+    class Config:
+        from_attributes = True
 
 # =====================================================
 # ENUMS
