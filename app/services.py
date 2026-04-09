@@ -1,8 +1,10 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import func, text
+from sqlalchemy import func, text, desc
 from decimal import Decimal
-from datetime import datetime
+
 from fastapi import HTTPException
+from datetime import datetime, timedelta
+
 
 from app.models import (
     HoaDonNhap,
@@ -13,7 +15,8 @@ from app.models import (
     ThuChi,
     NhanVien,
     KhachHang,
-    SanPham
+    SanPham,
+    GasDu, HoaDonGasDu
 )
 
 from app.schemas import HoaDonNhapCreate, HoaDonBanCreate
@@ -29,7 +32,6 @@ def now_vn():
 # =====================================================
 # CORE GAS DƯ (LEDGER)
 # =====================================================
-
 def apply_gas_du(
     db: Session,
     *,
@@ -38,7 +40,7 @@ def apply_gas_du(
     delta_kg: float,
     loai: str,
     ref_id: int = None,
-    ref_type: str = None,
+    ref_type: str = "gas_du",   # FIX
     ma_kh: str = None,
     ma_nv: str = None,
     ghi_chu: str = None,
@@ -62,84 +64,89 @@ def apply_gas_du(
     if ton_moi < 0:
         raise HTTPException(400, f"Không đủ gas dư: {ma_sp_goc}")
 
-    new_row = GasDu(
+    db.add(GasDu(
         thoi_diem=now_vn(),
         loai=loai,
         ma_sp_goc=ma_sp_goc,
         ma_kho=ma_kho,
         so_kg=delta_kg,
         ton_sau_kg=ton_moi,
-        id_hoa_don_ban=ref_id if ref_type == "sale" else None,
-        id_phieu_nhap=ref_id if ref_type == "import" else None,
+        ref_type="gas_du",
+        ref_id=ref_id,
         ma_kh=ma_kh,
         ma_nv=ma_nv,
         ghi_chu=ghi_chu,
-        ref_type=ref_type,
         created_at=now_vn(),
-    )
+    ))
 
-    db.add(new_row)
+def confirm_gas_du_service(db: Session, hoa_don: HoaDonGasDu, user):
 
+    if hoa_don.trang_thai == "xac_nhan":
+        raise HTTPException(400, "Đã confirm")
 
-# =====================================================
-# 🔥 GAS DƯ RIÊNG (NEW - TÁCH KHỎI SALE)
-# =====================================================
+    items = hoa_don.items
 
-def apply_gas_du_from_sale(
-    db: Session,
-    hoa_don: HoaDonBan,
-    items: list
-):
-    """
-    items = [
-        {
-            "ma_sp": "GAS12",
-            "so_kg_thuc_te": 3
-        }
-    ]
-    """
+    tong_tien = Decimal("0")
 
     for item in items:
 
-        sp = db.query(SanPham).filter(
-            SanPham.ma_sp == item["ma_sp"]
-        ).first()
+        # =====================
+        # 1. TRỪ BÌNH
+        # =====================
+        db.execute(text("""
+            UPDATE ton_kho_chot_ngay
+            SET so_luong = so_luong - :sl
+            WHERE ma_kho = :ma_kho AND ma_sp = :ma_sp
+        """), {
+            "sl": item.so_luong_vo,
+            "ma_kho": hoa_don.ma_kho,
+            "ma_sp": item.ma_sp_vo
+        })
 
-        if not sp or not sp.dung_tich_kg:
-            continue
+        # =====================
+        # 2. CỘNG GAS DƯ
+        # =====================
+        kg = item.tong_kg
 
-        dinh_muc = Decimal(str(sp.dung_tich_kg))
-        thuc_te = Decimal(str(item["so_kg_thuc_te"]))
+        apply_gas_du(
+            db,
+            ma_sp_goc=item.ma_sp_vo,
+            ma_kho=hoa_don.ma_kho,
+            delta_kg=float(kg),
+            loai="phat_sinh",
+            ref_id=hoa_don.id,
+            ma_nv=user.ma_nv
+        )
 
-        if thuc_te == dinh_muc:
-            continue
+        # =====================
+        # 3. BÁN GAS DƯ
+        # =====================
+        apply_gas_du(
+            db,
+            ma_sp_goc=item.ma_sp_vo,
+            ma_kho=hoa_don.ma_kho,
+            delta_kg=float(-kg),
+            loai="ban",
+            ref_id=hoa_don.id,
+            ma_nv=user.ma_nv
+        )
 
-        if thuc_te < dinh_muc:
-            # sinh gas dư
-            apply_gas_du(
-                db,
-                ma_sp_goc=item["ma_sp"],
-                ma_kho=hoa_don.ma_kho,
-                delta_kg=float(dinh_muc - thuc_te),
-                loai="phat_sinh",
-                ref_id=hoa_don.id,
-                ref_type="sale",
-                ma_kh=hoa_don.ma_kh,
-                ma_nv=hoa_don.ma_nv,
-            )
-        else:
-            # lấy từ gas dư
-            apply_gas_du(
-                db,
-                ma_sp_goc=item["ma_sp"],
-                ma_kho=hoa_don.ma_kho,
-                delta_kg=float(-(thuc_te - dinh_muc)),
-                loai="ban",
-                ref_id=hoa_don.id,
-                ref_type="sale",
-                ma_kh=hoa_don.ma_kh,
-                ma_nv=hoa_don.ma_nv,
-            )
+        tong_tien += Decimal(str(item.thanh_tien))
+
+    # =====================
+    # 4. THU TIỀN (GIỐNG SALE)
+    # =====================
+    if hoa_don.tien_mat > 0:
+        # giống logic thu_chi của sale
+        pass
+
+    if hoa_don.tien_ck > 0:
+        # giống logic sale
+        pass
+
+    hoa_don.trang_thai = "xac_nhan"
+
+
 # =====================================================
 # CHI TIẾT HÓA ĐƠN BÁN
 # =====================================================
