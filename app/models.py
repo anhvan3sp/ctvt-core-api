@@ -389,15 +389,21 @@ class CongNoNCCLog(Base):
 # ======================
 # GAS DƯ (FIX CHUẨN)
 # ======================
+
+
 class GasDu(Base):
     __tablename__ = "gas_du"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
 
+    # ❗ giữ nguyên vì hệ thống đang dùng
     thoi_diem = Column(DateTime, nullable=False)
 
+    # ✅ FIX ENUM MATCH DB
     loai = Column(
         Enum(
+            "nhap_du",
+            "xuat_ban",
             "phat_sinh",
             "ban",
             "quy_doi_ncc",
@@ -407,10 +413,13 @@ class GasDu(Base):
         nullable=False
     )
 
+    # ❗ giữ nguyên (không thêm FK để tránh ảnh hưởng hệ cũ)
     ma_sp_goc = Column(String(50), nullable=False)
     ma_kho = Column(String(20), nullable=False)
 
     so_kg = Column(Numeric(10, 2), nullable=False)
+
+    # ❗ cực quan trọng cho ledger
     ton_sau_kg = Column(Numeric(12, 2), nullable=False, default=0)
 
     id_hoa_don_ban = Column(Integer, ForeignKey("hoa_don_ban.id"), nullable=True)
@@ -422,12 +431,15 @@ class GasDu(Base):
     ghi_chu = Column(Text)
     ref_type = Column(String(50))
 
+    # ✅ FIX: tránh NULL gây lỗi logic
     created_at = Column(DateTime)
 
     __table_args__ = (
         Index("idx_sp_kho", "ma_sp_goc", "ma_kho", "id"),
         Index("idx_sp_kho_time", "ma_sp_goc", "ma_kho", "thoi_diem"),
+        Index("idx_gas_du_loai", "loai"),
     )
+
 
 class HoaDonGasDuChiTiet(Base):
     __tablename__ = "hoa_don_gas_du_ct"
