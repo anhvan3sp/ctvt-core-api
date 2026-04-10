@@ -149,6 +149,8 @@ def create_gas_du_service(db: Session, payload: dict, user):
         db.rollback()
         raise e
 
+
+
 def confirm_gas_du_service(db, id, user):
 
     try:
@@ -158,83 +160,61 @@ def confirm_gas_du_service(db, id, user):
             .first()
 
         if not hd:
-            raise HTTPException(404, "Không tìm thấy")
+            raise Exception("Không tìm thấy")
 
         if hd.trang_thai == "xac_nhan":
-            raise HTTPException(400, "Đã confirm")
+            raise Exception("Đã confirm")
 
         items = db.query(HoaDonGasDuChiTiet)\
             .filter_by(id_hoa_don=hd.id)\
             .all()
 
-        if not items:
-            raise HTTPException(400, "Không có chi tiết")
-
         for item in items:
 
-            so_luong_vo = Decimal(str(item.so_luong_vo or 0))
-            quy_doi_kg = Decimal(str(item.quy_doi_kg or 0))
-            kg_ban = Decimal(str(item.kg_ban or 0))
-
-            tong_kg = so_luong_vo * quy_doi_kg
+            tong_kg = item.so_luong_vo * item.quy_doi_kg
+            kg_ban = item.kg_ban
             kg_du = tong_kg - kg_ban
 
-            # =========================
-            # 1. TRỪ BÌNH (FIX text)
-            # =========================
-            db.execute(text("""
+            # 1. TRỪ BÌNH
+            db.execute("""
                 UPDATE ton_kho_chot_ngay
                 SET so_luong = so_luong - :sl
                 WHERE ma_sp = :ma_sp AND ma_kho = :kho
-            """), {
-                "sl": float(so_luong_vo),
+            """, {
+                "sl": item.so_luong_vo,
                 "ma_sp": item.ma_sp_vo,
                 "kho": hd.ma_kho
             })
 
-            # =========================
             # 2. NHẬP GAS DƯ
-            # =========================
             if kg_du > 0:
                 apply_gas_du(
                     db,
                     ma_sp_goc=item.ma_sp_vo,
                     ma_kho=hd.ma_kho,
-                    delta_kg=float(kg_du),
+                    delta_kg=kg_du,
                     loai="nhap_du",
                     ref_id=hd.id
                 )
 
-            # =========================
             # 3. BÁN GAS DƯ
-            # =========================
             if kg_ban > 0:
                 apply_gas_du(
                     db,
                     ma_sp_goc=item.ma_sp_vo,
                     ma_kho=hd.ma_kho,
-                    delta_kg=-float(kg_ban),
+                    delta_kg=-kg_ban,
                     loai="xuat_ban",
                     ref_id=hd.id
                 )
 
-        # =========================
-        # UPDATE TRẠNG THÁI
-        # =========================
         hd.trang_thai = "xac_nhan"
 
-        db.commit()
-
-        return {
-            "id": hd.id,
-            "status": "xac_nhan"
-        }
+        db.commit()   # 🔥 QUAN TRỌNG
 
     except Exception as e:
         db.rollback()
         raise e
-
-
 
 # =====================================================
 # CHI TIẾT HÓA ĐƠN BÁN
