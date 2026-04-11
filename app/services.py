@@ -60,6 +60,8 @@ def apply_gas_du(db, ma_sp_goc, ma_kho, delta_kg, loai, ref_id):
     ton_sau = ton_truoc + delta_kg
 
     # ===== CHỐNG ÂM =====
+    if not ma_sp_goc or ma_sp_goc.strip() == "":
+        raise HTTPException(400, "ma_sp_goc không hợp lệ")
     if ton_sau < 0:
         raise HTTPException(400, f"Âm tồn gas dư: {ma_sp_goc}")
 
