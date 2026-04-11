@@ -36,52 +36,38 @@ def now_vn():
 # =====================================================
 # CORE GAS DƯ (LEDGER)
 # =====================================================
-def apply_gas_du(
-    db: Session,
-    *,
-    ma_sp_goc: str,
-    ma_kho: str,
-    delta_kg: float,
-    loai: str,
-    ref_id: int = None,
-    ref_type: str = "gas_du",
-    ma_kh: str = None,
-    ma_nv: str = None,
-    ghi_chu: str = None,
-):
+def apply_gas_du(db, ma_sp_goc, ma_kho, delta_kg, loai, ref_id):
+
     delta_kg = Decimal(str(delta_kg))
 
-    last_row = (
-        db.query(GasDu)
-        .filter(
+    last = db.execute(
+        select(GasDu)
+        .where(
             GasDu.ma_sp_goc == ma_sp_goc,
-            GasDu.ma_kho == ma_kho,
+            GasDu.ma_kho == ma_kho
         )
-        .order_by(desc(GasDu.id))
+        .order_by(GasDu.id.desc())
+        .limit(1)
         .with_for_update()
-        .first()
-    )
+    ).scalar_one_or_none()
 
-    # 🔥 FIX: dùng ton_sau (không dùng ton_sau_kg nữa nếu DB đã đổi)
-    ton_truoc = last_row.ton_sau if last_row else Decimal("0")
-    ton_moi = ton_truoc + delta_kg
+    ton_truoc = Decimal(last.ton_sau) if last else Decimal("0")
+    ton_sau = ton_truoc + delta_kg
 
-    if ton_moi < 0:
-        raise HTTPException(400, f"Không đủ gas dư: {ma_sp_goc}")
+    # 🔥 QUAN TRỌNG: KHÔNG cho âm
+    if ton_sau < 0:
+        raise HTTPException(400, f"Âm tồn gas dư: {ma_sp_goc}")
 
     db.add(GasDu(
         thoi_diem=now_vn(),
-        loai=loai,
         ma_sp_goc=ma_sp_goc,
         ma_kho=ma_kho,
         so_kg=delta_kg,
-        ton_sau=ton_moi,   # 🔥 FIX
-        ref_type="gas_du",
+        ton_sau=ton_sau,
+        loai=loai,
         ref_id=ref_id,
-        ma_kh=ma_kh,
-        ma_nv=ma_nv,
-        ghi_chu=ghi_chu,
-        created_at=now_vn(),
+        ref_type="gas_du",
+        created_at=now_vn()
     ))
 
 def create_gas_du_service(db: Session, payload: dict, user):
