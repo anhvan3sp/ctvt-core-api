@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import func, text, desc
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from app.models import HoaDonGasDuChiTiet  # nhớ import
 from fastapi import HTTPException
 from datetime import datetime, timedelta
@@ -73,7 +73,7 @@ def apply_gas_du(
     else:
         raise HTTPException(400, "Loại không hợp lệ")
 
-    # ===== LẤY TỒN TRƯỚC (LOCK) =====
+    # ===== LẤY TỒN TRƯỚC =====
     last = db.execute(
         select(GasDu)
         .where(
@@ -92,7 +92,6 @@ def apply_gas_du(
     if ton_sau < 0:
         raise HTTPException(400, f"Âm tồn gas dư: {ma_sp_goc}")
 
-    # ===== INSERT =====
     db.add(GasDu(
         thoi_diem=now_vn(),
         ma_sp_goc=ma_sp_goc,
@@ -180,7 +179,6 @@ def create_gas_du_service(db: Session, payload: dict, user):
 def confirm_gas_du_service(db, id, user):
 
     try:
-        # ===== LOCK HEADER =====
         hd = db.execute(
             select(HoaDonGasDu)
             .where(HoaDonGasDu.id == id)
@@ -193,7 +191,6 @@ def confirm_gas_du_service(db, id, user):
         if hd.trang_thai == "xac_nhan":
             raise HTTPException(400, "Đã confirm")
 
-        # ===== LẤY CHI TIẾT =====
         items = db.execute(
             select(HoaDonGasDuChiTiet)
             .where(HoaDonGasDuChiTiet.id_hoa_don == id)
@@ -202,63 +199,33 @@ def confirm_gas_du_service(db, id, user):
         if not items:
             raise HTTPException(400, "Không có dữ liệu")
 
-        # =========================
-        # GOM THEO SẢN PHẨM
-        # =========================
-        map_du = defaultdict(Decimal)
-        map_ban = defaultdict(Decimal)
-
+        # ===== NHẬP TRƯỚC =====
         for item in items:
-
-            ma_sp = (item.ma_sp_vo or "").strip().upper()
-
-            so_luong_vo = Decimal(str(item.so_luong_vo or 0))
-            quy_doi_kg = Decimal(str(item.quy_doi_kg or 0))
-            kg_ban = Decimal(str(item.kg_ban or 0))
-
-            tong_kg = so_luong_vo * quy_doi_kg
-
-            # ===== VALIDATE =====
-            if kg_ban < 0:
-                raise HTTPException(400, f"{ma_sp}: kg_ban âm")
-
-            if kg_ban > tong_kg:
-                raise HTTPException(400, f"{ma_sp}: kg_ban > tong_kg")
-
-            kg_du = tong_kg - kg_ban
-
-            map_du[ma_sp] += kg_du
-            map_ban[ma_sp] += kg_ban
-
-        # =========================
-        # APPLY NHẬP TRƯỚC
-        # =========================
-        for ma_sp, kg_du in map_du.items():
-            if kg_du > 0:
+            if item.so_luong_vo and item.quy_doi_kg:
                 apply_gas_du(
                     db,
-                    ma_sp_goc=ma_sp,
+                    ma_sp_goc=item.ma_sp_vo,
                     ma_kho=hd.ma_kho,
-                    delta_kg=kg_du,
                     loai="nhap_du",
-                    ref_id=hd.id
+                    so_luong_vo=item.so_luong_vo,
+                    quy_doi_kg=item.quy_doi_kg,
+                    ref_id=hd.id,
+                    ma_nv=user.ma_nv
                 )
 
-        # =========================
-        # APPLY XUẤT SAU
-        # =========================
-        for ma_sp, kg_ban in map_ban.items():
-            if kg_ban > 0:
+        # ===== XUẤT SAU =====
+        for item in items:
+            if item.kg_ban and item.kg_ban > 0:
                 apply_gas_du(
                     db,
-                    ma_sp_goc=ma_sp,
+                    ma_sp_goc=item.ma_sp_vo,
                     ma_kho=hd.ma_kho,
-                    delta_kg=-kg_ban,
                     loai="xuat_ban",
-                    ref_id=hd.id
+                    kg_ban=item.kg_ban,
+                    ref_id=hd.id,
+                    ma_nv=user.ma_nv
                 )
 
-        # ===== UPDATE TRẠNG THÁI =====
         hd.trang_thai = "xac_nhan"
 
         db.commit()
