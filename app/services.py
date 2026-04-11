@@ -36,10 +36,15 @@ def now_vn():
 # =====================================================
 # CORE GAS DƯ (LEDGER)
 # =====================================================
+
 def apply_gas_du(db, ma_sp_goc, ma_kho, delta_kg, loai, ref_id):
 
+    # ===== CHUẨN HÓA =====
+    ma_sp_goc = ma_sp_goc.strip().upper()
+    ma_kho = ma_kho.strip().upper()
     delta_kg = Decimal(str(delta_kg))
 
+    # ===== LẤY TỒN CUỐI (LOCK) =====
     last = db.execute(
         select(GasDu)
         .where(
@@ -51,13 +56,14 @@ def apply_gas_du(db, ma_sp_goc, ma_kho, delta_kg, loai, ref_id):
         .with_for_update()
     ).scalar_one_or_none()
 
-    ton_truoc = Decimal(last.ton_sau) if last else Decimal("0")
+    ton_truoc = Decimal(str(last.ton_sau)) if last else Decimal("0")
     ton_sau = ton_truoc + delta_kg
 
-    # 🔥 QUAN TRỌNG: KHÔNG cho âm
+    # ===== CHỐNG ÂM =====
     if ton_sau < 0:
         raise HTTPException(400, f"Âm tồn gas dư: {ma_sp_goc}")
 
+    # ===== INSERT LEDGER =====
     db.add(GasDu(
         thoi_diem=now_vn(),
         ma_sp_goc=ma_sp_goc,
@@ -69,7 +75,6 @@ def apply_gas_du(db, ma_sp_goc, ma_kho, delta_kg, loai, ref_id):
         ref_type="gas_du",
         created_at=now_vn()
     ))
-
 def create_gas_du_service(db: Session, payload: dict, user):
 
     items = payload.get("items", [])
@@ -140,9 +145,12 @@ def create_gas_du_service(db: Session, payload: dict, user):
 
 
 
+
+
 def confirm_gas_du_service(db, id, user):
 
     try:
+        # ===== LOCK HEADER =====
         hd = db.execute(
             select(HoaDonGasDu)
             .where(HoaDonGasDu.id == id)
@@ -155,6 +163,7 @@ def confirm_gas_du_service(db, id, user):
         if hd.trang_thai == "xac_nhan":
             raise HTTPException(400, "Đã confirm")
 
+        # ===== LẤY CHI TIẾT =====
         items = db.execute(
             select(HoaDonGasDuChiTiet)
             .where(HoaDonGasDuChiTiet.id_hoa_don == id)
@@ -164,28 +173,32 @@ def confirm_gas_du_service(db, id, user):
             raise HTTPException(400, "Không có dữ liệu")
 
         # =========================
-        # GOM DỮ LIỆU
+        # GOM THEO SẢN PHẨM
         # =========================
         map_du = defaultdict(Decimal)
         map_ban = defaultdict(Decimal)
 
         for item in items:
+
+            ma_sp = (item.ma_sp_vo or "").strip().upper()
+
             so_luong_vo = Decimal(str(item.so_luong_vo or 0))
             quy_doi_kg = Decimal(str(item.quy_doi_kg or 0))
             kg_ban = Decimal(str(item.kg_ban or 0))
 
             tong_kg = so_luong_vo * quy_doi_kg
 
+            # ===== VALIDATE =====
             if kg_ban < 0:
-                raise HTTPException(400, "kg_ban âm")
+                raise HTTPException(400, f"{ma_sp}: kg_ban âm")
 
             if kg_ban > tong_kg:
-                raise HTTPException(400, "kg_ban > tong_kg")
+                raise HTTPException(400, f"{ma_sp}: kg_ban > tong_kg")
 
             kg_du = tong_kg - kg_ban
 
-            map_du[item.ma_sp_vo] += kg_du
-            map_ban[item.ma_sp_vo] += kg_ban
+            map_du[ma_sp] += kg_du
+            map_ban[ma_sp] += kg_ban
 
         # =========================
         # APPLY NHẬP TRƯỚC
@@ -215,6 +228,7 @@ def confirm_gas_du_service(db, id, user):
                     ref_id=hd.id
                 )
 
+        # ===== UPDATE TRẠNG THÁI =====
         hd.trang_thai = "xac_nhan"
 
         db.commit()
@@ -225,7 +239,6 @@ def confirm_gas_du_service(db, id, user):
         db.rollback()
         print("GAS_DU_CONFIRM_ERROR:", str(e))
         raise HTTPException(400, str(e))
-
     
 # =====================================================
 # CHI TIẾT HÓA ĐƠN BÁN
