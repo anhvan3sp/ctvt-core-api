@@ -37,14 +37,43 @@ def now_vn():
 # CORE GAS DƯ (LEDGER)
 # =====================================================
 
-def apply_gas_du(db, ma_sp_goc, ma_kho, delta_kg, loai, ref_id):
+
+def D(x):
+    return Decimal(str(x or 0)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+def apply_gas_du(
+    db,
+    *,
+    ma_sp_goc,
+    ma_kho,
+    loai,
+    so_luong_vo=0,
+    quy_doi_kg=0,
+    kg_ban=0,
+    ref_id=None,
+    ma_nv=None,
+):
 
     # ===== CHUẨN HÓA =====
     ma_sp_goc = ma_sp_goc.strip().upper()
     ma_kho = ma_kho.strip().upper()
-    delta_kg = Decimal(str(delta_kg))
 
-    # ===== LẤY TỒN CUỐI (LOCK) =====
+    so_luong_vo = D(so_luong_vo)
+    quy_doi_kg = D(quy_doi_kg)
+    kg_ban = D(kg_ban)
+
+    tong_kg = D(so_luong_vo * quy_doi_kg)
+
+    # ===== XÁC ĐỊNH SO_KG =====
+    if loai == "nhap_du":
+        so_kg = tong_kg
+    elif loai == "xuat_ban":
+        so_kg = -kg_ban
+    else:
+        raise HTTPException(400, "Loại không hợp lệ")
+
+    # ===== LẤY TỒN TRƯỚC (LOCK) =====
     last = db.execute(
         select(GasDu)
         .where(
@@ -56,24 +85,24 @@ def apply_gas_du(db, ma_sp_goc, ma_kho, delta_kg, loai, ref_id):
         .with_for_update()
     ).scalar_one_or_none()
 
-    ton_truoc = Decimal(str(last.ton_sau)) if last else Decimal("0")
-    ton_sau = ton_truoc + delta_kg
+    ton_truoc = D(last.ton_sau) if last else D(0)
+    ton_sau = D(ton_truoc + so_kg)
 
     # ===== CHỐNG ÂM =====
-    if not ma_sp_goc or ma_sp_goc.strip() == "":
-        raise HTTPException(400, "ma_sp_goc không hợp lệ")
-    
+    if ton_sau < 0:
+        raise HTTPException(400, f"Âm tồn gas dư: {ma_sp_goc}")
 
-    # ===== INSERT LEDGER =====
+    # ===== INSERT =====
     db.add(GasDu(
         thoi_diem=now_vn(),
         ma_sp_goc=ma_sp_goc,
         ma_kho=ma_kho,
-        so_kg=delta_kg,
+        so_kg=so_kg,
         ton_sau=ton_sau,
         loai=loai,
         ref_id=ref_id,
         ref_type="gas_du",
+        ma_nv=ma_nv,
         created_at=now_vn()
     ))
 def create_gas_du_service(db: Session, payload: dict, user):
