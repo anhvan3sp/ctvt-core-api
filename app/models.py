@@ -396,10 +396,10 @@ class GasDu(Base):
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
 
-    # ❗ giữ nguyên vì hệ thống đang dùng
+    # thời điểm phát sinh
     thoi_diem = Column(DateTime, nullable=False)
 
-    # ✅ FIX ENUM MATCH DB
+    # enum match DB
     loai = Column(
         Enum(
             "nhap_du",
@@ -413,13 +413,12 @@ class GasDu(Base):
         nullable=False
     )
 
-    # ❗ giữ nguyên (không thêm FK để tránh ảnh hưởng hệ cũ)
     ma_sp_goc = Column(String(50), nullable=False)
     ma_kho = Column(String(20), nullable=False)
 
     so_kg = Column(Numeric(10, 2), nullable=False)
 
-    # ❗ cực quan trọng cho ledger
+    # 🔥 QUAN TRỌNG: đúng tên DB
     ton_sau = Column(Numeric(12, 2), nullable=False, default=0)
 
     id_hoa_don_ban = Column(Integer, ForeignKey("hoa_don_ban.id"), nullable=True)
@@ -429,17 +428,20 @@ class GasDu(Base):
     ma_nv = Column(String(50))
 
     ghi_chu = Column(Text)
-    ref_type = Column(String(50))
 
-    # ✅ FIX: tránh NULL gây lỗi logic
+    # 🔥 FIX LỖI 500
+    ref_type = Column(String(50))
+    ref_id = Column(BigInteger)
+
     created_at = Column(DateTime)
 
     __table_args__ = (
         Index("idx_sp_kho", "ma_sp_goc", "ma_kho", "id"),
         Index("idx_sp_kho_time", "ma_sp_goc", "ma_kho", "thoi_diem"),
-        Index("idx_gas_du_loai", "loai"),
+        Index("idx_time", "thoi_diem"),
+        Index("idx_hd", "id_hoa_don_ban"),
+        Index("idx_gasdu_ref", "ref_id"),
     )
-
 
 class HoaDonGasDuChiTiet(Base):
     __tablename__ = "hoa_don_gas_du_ct"
