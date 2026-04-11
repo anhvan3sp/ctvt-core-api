@@ -5,6 +5,9 @@ from app.models import HoaDonGasDuChiTiet  # nhớ import
 from fastapi import HTTPException
 from datetime import datetime, timedelta
 
+from sqlalchemy import select
+from collections import defaultdict
+
 
 
 from app.models import (
@@ -150,13 +153,15 @@ def create_gas_du_service(db: Session, payload: dict, user):
         raise e
 
 
+
 def confirm_gas_du_service(db, id, user):
 
     try:
-        hd = db.query(HoaDonGasDu)\
-            .with_for_update()\
-            .filter_by(id=id)\
-            .first()
+        hd = db.execute(
+            select(HoaDonGasDu)
+            .where(HoaDonGasDu.id == id)
+            .with_for_update()
+        ).scalar_one_or_none()
 
         if not hd:
             raise HTTPException(404, "Không tìm thấy")
@@ -164,34 +169,60 @@ def confirm_gas_du_service(db, id, user):
         if hd.trang_thai == "xac_nhan":
             raise HTTPException(400, "Đã confirm")
 
-        items = db.query(HoaDonGasDuChiTiet)\
-            .filter_by(id_hoa_don=hd.id)\
-            .all()
+        items = db.execute(
+            select(HoaDonGasDuChiTiet)
+            .where(HoaDonGasDuChiTiet.id_hoa_don == id)
+        ).scalars().all()
+
+        if not items:
+            raise HTTPException(400, "Không có dữ liệu")
+
+        # =========================
+        # GOM DỮ LIỆU
+        # =========================
+        map_du = defaultdict(Decimal)
+        map_ban = defaultdict(Decimal)
 
         for item in items:
+            so_luong_vo = Decimal(str(item.so_luong_vo or 0))
+            quy_doi_kg = Decimal(str(item.quy_doi_kg or 0))
+            kg_ban = Decimal(str(item.kg_ban or 0))
 
-            tong_kg = item.so_luong_vo * item.quy_doi_kg
-            kg_ban = item.kg_ban or 0
+            tong_kg = so_luong_vo * quy_doi_kg
+
+            if kg_ban < 0:
+                raise HTTPException(400, "kg_ban âm")
+
+            if kg_ban > tong_kg:
+                raise HTTPException(400, "kg_ban > tong_kg")
+
             kg_du = tong_kg - kg_ban
 
-            # 🔥 CHỈ XỬ LÝ GAS (KHÔNG ĐỤNG VỎ)
+            map_du[item.ma_sp_vo] += kg_du
+            map_ban[item.ma_sp_vo] += kg_ban
 
-            # + gas dư
+        # =========================
+        # APPLY NHẬP TRƯỚC
+        # =========================
+        for ma_sp, kg_du in map_du.items():
             if kg_du > 0:
                 apply_gas_du(
                     db,
-                    ma_sp_goc=item.ma_sp_vo,
+                    ma_sp_goc=ma_sp,
                     ma_kho=hd.ma_kho,
                     delta_kg=kg_du,
                     loai="nhap_du",
                     ref_id=hd.id
                 )
 
-            # - gas bán
+        # =========================
+        # APPLY XUẤT SAU
+        # =========================
+        for ma_sp, kg_ban in map_ban.items():
             if kg_ban > 0:
                 apply_gas_du(
                     db,
-                    ma_sp_goc=item.ma_sp_vo,
+                    ma_sp_goc=ma_sp,
                     ma_kho=hd.ma_kho,
                     delta_kg=-kg_ban,
                     loai="xuat_ban",
@@ -206,8 +237,8 @@ def confirm_gas_du_service(db, id, user):
 
     except Exception as e:
         db.rollback()
-        raise e
-
+        print("GAS_DU_CONFIRM_ERROR:", str(e))
+        raise HTTPException(400, str(e))
 
     
 # =====================================================
