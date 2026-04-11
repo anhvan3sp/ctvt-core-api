@@ -150,7 +150,6 @@ def create_gas_du_service(db: Session, payload: dict, user):
         raise e
 
 
-
 def confirm_gas_du_service(db, id, user):
 
     try:
@@ -172,38 +171,12 @@ def confirm_gas_du_service(db, id, user):
         for item in items:
 
             tong_kg = item.so_luong_vo * item.quy_doi_kg
-            kg_ban = item.kg_ban
+            kg_ban = item.kg_ban or 0
             kg_du = tong_kg - kg_ban
 
-            # 🔥 LOCK + CHECK TỒN
-            row = db.execute(text("""
-                SELECT so_luong
-                FROM ton_kho_chot_ngay
-                WHERE ma_sp = :ma_sp AND ma_kho = :kho
-                FOR UPDATE
-            """), {
-                "ma_sp": item.ma_sp_vo,
-                "kho": hd.ma_kho
-            }).fetchone()
+            # 🔥 CHỈ XỬ LÝ GAS (KHÔNG ĐỤNG VỎ)
 
-            if not row:
-                raise HTTPException(400, f"Không có tồn kho {item.ma_sp_vo}")
-
-            if row[0] < item.so_luong_vo:
-                raise HTTPException(400, f"Không đủ tồn {item.ma_sp_vo}")
-
-            # 🔥 TRỪ KHO
-            db.execute(text("""
-                UPDATE ton_kho_chot_ngay
-                SET so_luong = so_luong - :sl
-                WHERE ma_sp = :ma_sp AND ma_kho = :kho
-            """), {
-                "sl": item.so_luong_vo,
-                "ma_sp": item.ma_sp_vo,
-                "kho": hd.ma_kho
-            })
-
-            # 🔥 GAS DƯ +
+            # + gas dư
             if kg_du > 0:
                 apply_gas_du(
                     db,
@@ -214,7 +187,7 @@ def confirm_gas_du_service(db, id, user):
                     ref_id=hd.id
                 )
 
-            # 🔥 GAS DƯ -
+            # - gas bán
             if kg_ban > 0:
                 apply_gas_du(
                     db,
@@ -227,13 +200,14 @@ def confirm_gas_du_service(db, id, user):
 
         hd.trang_thai = "xac_nhan"
 
-        db.commit()   # ✅ chỉ commit 1 lần cuối
+        db.commit()
 
         return {"success": True}
 
     except Exception as e:
         db.rollback()
         raise e
+
 
     
 # =====================================================
