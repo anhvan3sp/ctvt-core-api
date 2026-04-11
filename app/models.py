@@ -420,7 +420,7 @@ class GasDu(Base):
     so_kg = Column(Numeric(10, 2), nullable=False)
 
     # ❗ cực quan trọng cho ledger
-    ton_sau_kg = Column(Numeric(12, 2), nullable=False, default=0)
+    ton_sau = Column(Numeric(12, 2), nullable=False, default=0)
 
     id_hoa_don_ban = Column(Integer, ForeignKey("hoa_don_ban.id"), nullable=True)
     id_phieu_nhap = Column(Integer, nullable=True)
