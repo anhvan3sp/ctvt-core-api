@@ -15,7 +15,7 @@ from app.routers import ai
 from app.routers import cancel
 from app.routers import phat_sinh
 from app.routers.payment import router as payment_router
-from app.routers import gas_du
+# from app.routers import gas_du
 
 
 
@@ -32,9 +32,9 @@ app.add_middleware(
     allow_origins=["*"],   # mở hết để tránh lỗi CORS
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"],
+    allow_headers=["*"], 
 )
-app.include_router(gas_du.router)
+# app.include_router(gas_du.router)
 app.include_router(payment_router)
 app.include_router(phat_sinh.router)
 app.include_router(cancel.router)
