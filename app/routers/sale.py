@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import select
+from sqlalchemy import select, text
+
 from decimal import Decimal
 from datetime import datetime, timedelta
 from app.models import KhachHang, SanPham
