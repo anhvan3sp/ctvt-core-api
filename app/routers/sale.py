@@ -204,7 +204,74 @@ def confirm_sale(
         # UPDATE TRẠNG THÁI
         # =========================
         hoa_don.trang_thai = "xac_nhan"
-
+        # =========================
+        # THU_CHI (QUAN TRỌNG NHẤT)
+        # =========================
+        
+        # --- tiền mặt (nhân viên)
+        if hoa_don.tien_mat > 0:
+        
+            row = db.execute(text("""
+                SELECT so_du_sau
+                FROM thu_chi
+                WHERE doi_tuong = 'nhan_vien'
+                AND ma_nv = :ma_nv
+                ORDER BY id DESC
+                LIMIT 1
+                FOR UPDATE
+            """), {"ma_nv": user.ma_nv}).fetchone()
+        
+            so_du = float(row[0]) if row else 0
+            so_du_moi = so_du + float(hoa_don.tien_mat)
+        
+            db.execute(text("""
+                INSERT INTO thu_chi (
+                    ngay, doi_tuong, ma_nv,
+                    so_tien, loai, hinh_thuc,
+                    loai_giao_dich, so_du_sau
+                )
+                VALUES (
+                    NOW(), 'nhan_vien', :ma_nv,
+                    :tien, 'thu', 'tien_mat',
+                    'ban_hang', :so_du
+                )
+            """), {
+                "ma_nv": user.ma_nv,
+                "tien": float(hoa_don.tien_mat),
+                "so_du": so_du_moi
+            })
+        
+        
+        # --- chuyển khoản (công ty)
+        if hoa_don.tien_ck > 0:
+        
+            row = db.execute(text("""
+                SELECT so_du_ct_sau
+                FROM thu_chi
+                WHERE doi_tuong = 'cong_ty'
+                ORDER BY id DESC
+                LIMIT 1
+                FOR UPDATE
+            """)).fetchone()
+        
+            so_du_ct = float(row[0]) if row else 0
+            so_du_ct_moi = so_du_ct + float(hoa_don.tien_ck)
+        
+            db.execute(text("""
+                INSERT INTO thu_chi (
+                    ngay, doi_tuong,
+                    so_tien, loai, hinh_thuc,
+                    loai_giao_dich, so_du_ct_sau
+                )
+                VALUES (
+                    NOW(), 'cong_ty',
+                    :tien, 'thu', 'chuyen_khoan',
+                    'ban_hang', :so_du
+                )
+            """), {
+                "tien": float(hoa_don.tien_ck),
+                "so_du": so_du_ct_moi
+            })
         db.commit()
 
         return {"msg": "XAC_NHAN_OK"}
